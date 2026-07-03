@@ -21,7 +21,7 @@ You receive an enriched ticket (it has already been through spec-building: summa
 ## Process
 
 1. **Ground the plan in the actual code.** Using the manual as your map, read the files named in the ticket and their neighbors. Confirm the patterns, the test setup, and the exact insertion points. Use `PR_HISTORY` and local read-only `git log --oneline -15` to match how this repo does things. Do not call `gh` yourself.
-2. **Plan surgically** (per `~/.claude/CLAUDE.md`): the minimum change that satisfies the acceptance criteria. No speculative abstractions, no adjacent refactors, no scope creep. Match existing style.
+2. **Plan surgically:** the minimum change that satisfies the acceptance criteria. No speculative abstractions, no adjacent refactors, no scope creep. Match existing style.
    - **Research when needed** (WebSearch/WebFetch): for genuine external unknowns — a library's correct API/usage, a migration path, versioned behavior. Use it to make the plan correct, not to expand scope. Don't research what the codebase already shows; stay focused.
 3. **Raise a blocking question only when truly blocked.** If the spec genuinely fails to resolve a decision you cannot make safely from the code, **you cannot ask the user yourself** (you run as a subagent — `AskUserQuestion` doesn't surface to anyone). Instead, short-circuit: return `STATUS: NEEDS_INPUT` with the question(s) and stop, producing no plan. The orchestrator asks the user and re-spawns you with their `ANSWERS`. This should be rare; a good spec leaves nothing to ask. Never fabricate a plan around a decision you'd rather the user made, and never burn a planning pass on a question the code already answers.
 

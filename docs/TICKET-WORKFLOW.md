@@ -28,7 +28,7 @@ Run `/wf-eval` whenever you change an agent prompt, a model tier, or the flow �
 |---|---|---|---|
 | `wf-spec-builder` | opus | Tech lead | Interactive — explores code + history, asks you the few questions that matter, produces an implementation-ready spec |
 | `wf-planner` | opus | Architect | Turns a spec'd ticket into a surgical plan + a forward **Context Pack**; emits `SPEC_GAPS` and `MANUAL_DRIFT` signals |
-| `wf-executor` | sonnet | Staff eng | Implements the plan with atomic commits; surfaces any new dependency; follows global CLAUDE.md |
+| `wf-executor` | sonnet | Staff eng | Implements the plan with atomic commits; surfaces any new dependency; works surgically |
 | `wf-reviewer` | opus | Principal reviewer | Reviews the diff — the bug that matters, not nits; high bar for blocking |
 | `wf-verifier` | sonnet | Release eng | Runs tests/build/lint, proves each acceptance criterion by execution |
 | `wf-cartographer` | sonnet | Onboarding lead | One-time: writes the repo's `CONTEXT.md` operating manual |
@@ -221,7 +221,7 @@ Cost-aware: each case spawns 1–2 agents + a judge — iterate on one case id w
 - **PR descriptions:** concise, high-fidelity (What / Why / Changes / Verification + Linear ref). No filler.
 - **Sandboxed execution:** all project code runs via `wf-exec` (no external egress, no credential reads); the `PreToolUse` guard enforces it.
 - **Commit attribution:** executor commits carry `Co-Authored-By: Claude <noreply@anthropic.com>`.
-- Everything obeys global `CLAUDE.md`: surgical changes, simplicity, goal-driven verification.
+- Every agent embeds the same engineering discipline: surgical changes, simplicity, goal-driven verification.
 
 ---
 

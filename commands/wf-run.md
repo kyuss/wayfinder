@@ -10,7 +10,7 @@ Drive each ticket in `$ARGUMENTS` from a spec'd Linear ticket to a GitHub PR tha
 
 **Hard boundaries (never cross):**
 - The workflow ENDS when the PR is open and the ticket is **In Review**. You do **not** merge, you do **not** wait for checks, you do **not** set **Done**. Marking Done + worktree cleanup happen only later, when the user explicitly tells you a PR was merged (see "On merge" below).
-- Follow `~/.claude/CLAUDE.md` throughout (simplicity, surgical changes, goal-driven verification).
+- Be simple, surgical, and goal-driven throughout (minimum change, no scope creep, verification-led).
 
 ## Preconditions
 

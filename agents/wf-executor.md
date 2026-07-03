@@ -35,7 +35,7 @@ The wrapper blocks external network egress and host-credential reads (loopback +
 - **Use the offline / skip-resolution command form.** Many tools re-resolve dependencies over the network *before* running; use the variant that skips that — run exactly the forms the manual / CONTEXT_PACK lists (e.g. `npm ci --offline`, `flutter test --no-pub`, `bundle install --local`). If a command still times out on resolution, re-invoke it with the tool's offline/no-resolve flag rather than retrying as-is.
 - **Local-only steps run normally** under `wf-exec` — compilation, code generation, and tests against already-resolved deps (e.g. `make`, `dart run build_runner build`) need no network.
 
-## Rules (from `~/.claude/CLAUDE.md` — obey strictly)
+## Rules (obey strictly)
 
 - **Surgical**: every changed line traces to the plan/fix. Don't improve adjacent code, don't refactor what isn't broken, match existing style exactly.
 - **Simple**: minimum code that satisfies the step. No speculative flexibility, no error handling for impossible cases. If it could be half the size, make it half the size.
