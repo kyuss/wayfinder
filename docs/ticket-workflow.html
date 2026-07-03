@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ticket Workflow — Framework Flow</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --line:#30363d;
+    --ink:#e6edf3; --muted:#9aa7b4; --faint:#6e7b8a;
+    --opus:#a371f7; --opus-bg:#21172e;
+    --sonnet:#4493f8; --sonnet-bg:#10243e;
+    --haiku:#3fb950; --haiku-bg:#102a17;
+    --you:#f0883e; --you-bg:#2b1a0e;
+    --stop:#f85149;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:radial-gradient(1200px 600px at 50% -10%, #18222f 0%, var(--bg) 60%);
+    color:var(--ink); font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    padding:48px 20px 80px;
+  }
+  .wrap{max-width:1080px;margin:0 auto}
+  h1{font-size:30px;margin:0 0 6px;letter-spacing:-.5px}
+  .sub{color:var(--muted);margin:0 0 8px;max-width:760px}
+  .src{color:var(--faint);font-size:12.5px;margin:0 0 36px}
+  code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:1.5px;color:var(--faint);
+     margin:48px 0 18px;border-bottom:1px solid var(--line);padding-bottom:8px}
+
+  /* legend */
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin:-8px 0 0}
+  .lg{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--muted)}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block}
+
+  /* agent cards */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-left-width:3px;border-radius:10px;padding:14px 15px}
+  .card .name{font-family:ui-monospace,monospace;font-weight:600;font-size:14px}
+  .card .role{font-size:11.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.6px;margin:2px 0 8px}
+  .card .desc{font-size:13px;color:var(--muted)}
+  .tier{float:right;font-size:10.5px;padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.4px}
+  .opus{border-left-color:var(--opus)} .opus .tier{background:var(--opus-bg);color:var(--opus)}
+  .sonnet{border-left-color:var(--sonnet)} .sonnet .tier{background:var(--sonnet-bg);color:var(--sonnet)}
+  .haiku{border-left-color:var(--haiku)} .haiku .tier{background:var(--haiku-bg);color:var(--haiku)}
+
+  /* commands */
+  .cmds{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+  .cmd{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:15px}
+  .cmd .c{font-family:ui-monospace,monospace;color:#79c0ff;font-size:15px;font-weight:600}
+  .cmd .when{display:inline-block;font-size:11px;color:var(--faint);border:1px solid var(--line);border-radius:20px;padding:1px 9px;margin-left:8px}
+  .cmd p{margin:9px 0 0;font-size:13px;color:var(--muted)}
+
+  /* pipeline */
+  .phase{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin-bottom:14px;position:relative}
+  .phase-h{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+  .phase-h .tag{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--faint)}
+  .phase-h .ttl{font-weight:600;font-size:16px}
+  .phase-h .meta{margin-left:auto;font-size:12px;color:var(--faint)}
+
+  .flow{display:flex;flex-direction:column;gap:0}
+  .step{display:flex;align-items:stretch;gap:12px}
+  .rail{display:flex;flex-direction:column;align-items:center;width:14px;flex:none}
+  .node{width:13px;height:13px;border-radius:50%;background:var(--panel2);border:2px solid var(--line);margin-top:4px}
+  .seg{flex:1;width:2px;background:var(--line);margin:2px 0}
+  .body{padding:0 0 16px}
+  .step:last-child .body{padding-bottom:0}
+  .act{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .pill{font-family:ui-monospace,monospace;font-size:12.5px;padding:3px 9px;border-radius:7px;border:1px solid var(--line);background:var(--panel2);white-space:nowrap}
+  .pill.op{border-color:var(--opus);color:#cda6ff;background:var(--opus-bg)}
+  .pill.so{border-color:var(--sonnet);color:#9cd0ff;background:var(--sonnet-bg)}
+  .pill.ha{border-color:var(--haiku);color:#86e29a;background:var(--haiku-bg)}
+  .pill.yo{border-color:var(--you);color:#ffc08a;background:var(--you-bg)}
+  .arr{color:var(--faint)}
+  .note{font-size:12.5px;color:var(--muted);margin:6px 0 0}
+  .loop{font-size:11.5px;color:#d2a8ff;background:var(--opus-bg);border:1px dashed #6e40c9;border-radius:6px;padding:2px 8px;display:inline-block}
+  .stop{display:flex;align-items:center;gap:10px;margin-top:4px;color:var(--stop);font-weight:600;font-size:14px}
+  .stop .sq{width:13px;height:13px;background:var(--stop);border-radius:3px;display:inline-block}
+  .guard{font-size:11.5px;color:#ffc08a;background:var(--you-bg);border:1px dashed #b06d2e;border-radius:6px;padding:2px 8px;display:inline-block}
+
+  .merge{border-color:#1f6feb55;background:linear-gradient(180deg,#0e1b2e,var(--panel))}
+  .pre{border-color:#8957e555;background:linear-gradient(180deg,#170e26,var(--panel))}
+  .preflight{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+  .chk{font-size:12px;color:var(--muted);background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:3px 9px}
+
+  /* feature columns */
+  .feat{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+  .feat .f{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:15px}
+  .feat .f h3{margin:0 0 6px;font-size:14px}
+  .feat .f p{margin:0;font-size:13px;color:var(--muted)}
+  .inv{list-style:none;padding:0;margin:0;display:grid;gap:9px}
+  .inv li{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:11px 14px;font-size:13.5px;color:var(--muted)}
+  .inv b{color:var(--ink)}
+  .key{color:var(--stop)}
+  .steps{counter-reset:s;list-style:none;padding:0;margin:0;display:grid;gap:8px}
+  .steps li{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:11px 14px 11px 44px;font-size:13.5px;color:var(--muted)}
+  .steps li::before{counter-increment:s;content:counter(s);position:absolute;left:12px;top:11px;width:22px;height:22px;border-radius:50%;background:var(--panel2);border:1px solid var(--line);color:var(--ink);font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center}
+  .steps li b{color:var(--ink)}
+  footer{color:var(--faint);font-size:12px;margin-top:50px;border-top:1px solid var(--line);padding-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Ticket Workflow Framework</h1>
+  <p class="sub">An autonomous Linear-ticket → GitHub-PR pipeline built from role-specialized Claude Code subagents. Each agent runs on a model tier matched to its cognitive load; each ticket is worked A→Z in its own git worktree.</p>
+  <p class="src">Visual companion to <code>TICKET-WORKFLOW.md</code> (this project directory) · the agent &amp; command files in <code>~/.claude/</code> are the source of truth</p>
+
+  <div class="legend">
+    <span class="lg"><span class="dot" style="background:var(--opus)"></span> Opus — reasoning &amp; decisions</span>
+    <span class="lg"><span class="dot" style="background:var(--sonnet)"></span> Sonnet — execution &amp; checks</span>
+    <span class="lg"><span class="dot" style="background:var(--haiku)"></span> Haiku — external API calls</span>
+    <span class="lg"><span class="dot" style="background:var(--you)"></span> You</span>
+  </div>
+
+  <!-- QUICK START -->
+  <h2>The shape of a run</h2>
+  <ol class="steps">
+    <li><code>/wf-prime</code> — <b>once per repo.</b> Writes a reusable <code>CONTEXT.md</code> operating manual.</li>
+    <li><code>/wf-spec&nbsp;ENG-12&nbsp;ENG-13</code> — <b>interactive.</b> Refine each ticket into a real spec, saved to its Linear description.</li>
+    <li><code>/wf-run&nbsp;ENG-12&nbsp;ENG-13</code> — <b>autonomous.</b> Each ticket → an open PR, ticket set <i>In Review</i>.</li>
+    <li><b>You</b> review &amp; merge the PR.</li>
+    <li>Tell it <code>"ENG-12 is merged"</code> — only now does it set <i>Done</i> and clean up the worktree.</li>
+  </ol>
+
+  <!-- AGENTS -->
+  <h2>The 10 Agents</h2>
+  <div class="grid">
+    <div class="card opus"><span class="tier">OPUS</span><div class="name">wf-spec-builder</div><div class="role">Tech lead</div><div class="desc">Explores code + history, asks you the few questions that matter, writes an implementation-ready spec.</div></div>
+    <div class="card opus"><span class="tier">OPUS</span><div class="name">wf-planner</div><div class="role">Architect</div><div class="desc">Turns the spec into a surgical plan + a forward <b>Context Pack</b>. Emits drift &amp; spec-gap signals.</div></div>
+    <div class="card sonnet"><span class="tier">SONNET</span><div class="name">wf-executor</div><div class="role">Staff engineer</div><div class="desc">Implements the plan with atomic commits. Obvious over clever; surfaces new deps; stops when done.</div></div>
+    <div class="card opus"><span class="tier">OPUS</span><div class="name">wf-reviewer</div><div class="role">Principal reviewer</div><div class="desc">Reviews the diff for the bug that matters — high, precise bar for blocking.</div></div>
+    <div class="card sonnet"><span class="tier">SONNET</span><div class="name">wf-verifier</div><div class="role">Release engineer</div><div class="desc">Runs tests/build/lint and proves each acceptance criterion by execution.</div></div>
+    <div class="card sonnet"><span class="tier">SONNET</span><div class="name">wf-cartographer</div><div class="role">Onboarding lead</div><div class="desc">One-time: writes the repo's <code>CONTEXT.md</code> operating manual.</div></div>
+    <div class="card haiku"><span class="tier">HAIKU</span><div class="name">wf-linear</div><div class="role">Boundary · Linear</div><div class="desc">Owns <b>all</b> Linear MCP calls — fetch, status transitions, description, PR link.</div></div>
+    <div class="card haiku"><span class="tier">HAIKU</span><div class="name">wf-github</div><div class="role">Boundary · GitHub</div><div class="desc">Owns <b>all</b> <code>gh</code> CLI calls — PR history, create PR, PR/merge status.</div></div>
+    <div class="card sonnet"><span class="tier">SONNET</span><div class="name">wf-runner</div><div class="role">Orchestration · inner loop</div><div class="desc">Drives <b>one</b> ticket's execute → review → verify loop in its worktree, so <code>--parallel</code> can run independent tickets at once. Never touches Linear/GitHub.</div></div>
+    <div class="card sonnet"><span class="tier">SONNET</span><div class="name">wf-judge</div><div class="role">Eval · LLM-as-judge</div><div class="desc">Eval-only. Scores an agent's plan or diff against a case rubric: pass/fail + 0–1 per dimension.</div></div>
+  </div>
+  <p class="note">An eleventh file, <code>notion.md</code>, also lives in <code>~/.claude/agents/</code> but is an unrelated general-purpose helper.</p>
+
+  <!-- COMMANDS -->
+  <h2>The 5 Commands</h2>
+  <div class="cmds">
+    <div class="cmd"><span class="c">/wf-prime</span><span class="when">once per repo</span><p>wf-cartographer writes <code>CONTEXT.md</code> — the durable, reusable operating manual. Highest leverage-per-token move.</p></div>
+    <div class="cmd"><span class="c">/wf-spec</span><span class="when">run first · interactive</span><p>Refines each ticket with you (one at a time) and writes the spec into its Linear <b>description</b>. Ticket stays in <i>To&nbsp;Do</i>.</p></div>
+    <div class="cmd"><span class="c">/wf-run</span><span class="when">autonomous · seq or <code>--parallel</code></span><p>Each ticket A→Z in its own worktree: <i>In&nbsp;Progress</i> → plan → build → review → verify → open PR → <i>In&nbsp;Review</i>. <code>--parallel</code> runs file-disjoint tickets concurrently (≤3) via <code>wf-runner</code>.</p></div>
+    <div class="cmd"><span class="c">/wf-eval</span><span class="when">regression gate · offline</span><p>Stage-evals the planner &amp; executor over seed cases, judged by <code>wf-judge</code> vs a baseline. Run after tuning any agent/model.</p></div>
+    <div class="cmd"><span class="c">/wf-calibrate</span><span class="when">validates the judge · offline</span><p>Grades <code>wf-judge</code> against a human-labeled gold set (agreement, FAIL precision/recall, bias probes) so the <code>/wf-eval</code> gate can be trusted. Re-run after changing the judge.</p></div>
+  </div>
+
+  <!-- PIPELINE -->
+  <h2>The Flow</h2>
+
+  <!-- prime -->
+  <div class="phase">
+    <div class="phase-h"><span class="tag">Setup</span><span class="ttl">/wf-prime</span><span class="meta">once per repo · reused by every ticket</span></div>
+    <div class="act">
+      <span class="pill so">wf-cartographer</span><span class="arr">→</span>
+      <span class="pill">CONTEXT.md  (the “MANUAL”, committed)</span>
+    </div>
+    <p class="note">Maps stack, architecture, conventions, and the exact build/test/lint commands into ~150 dense lines. Read on demand by every later agent.</p>
+  </div>
+
+  <!-- spec -->
+  <div class="phase">
+    <div class="phase-h"><span class="tag">Phase 1</span><span class="ttl">/wf-spec — interactive</span><span class="meta">one ticket at a time</span></div>
+    <div class="flow">
+      <div class="step"><div class="rail"><div class="node"></div><div class="seg"></div></div><div class="body">
+        <div class="act"><span class="pill ha">wf-linear</span><span class="arr">FETCH</span><span class="note" style="margin:0">pull ticket title, description, comments</span></div>
+      </div></div>
+      <div class="step"><div class="rail"><div class="node"></div><div class="seg"></div></div><div class="body">
+        <div class="act"><span class="pill ha">wf-github</span><span class="arr">PR_HISTORY</span><span class="note" style="margin:0">how related work was done here</span></div>
+      </div></div>
+      <div class="step"><div class="rail"><div class="node"></div><div class="seg"></div></div><div class="body">
+        <div class="act"><span class="pill op">wf-spec-builder</span><span class="arr">⇄</span><span class="pill yo">YOU</span><span class="loop">asks only the questions that change the build</span></div>
+        <p class="note">Reads the MANUAL + code, researches genuine unknowns, resolves every ambiguity.</p>
+      </div></div>
+      <div class="step"><div class="rail"><div class="node"></div></div><div class="body">
+        <div class="act"><span class="pill ha">wf-linear</span><span class="arr">UPDATE_DESCRIPTION</span><span class="note" style="margin:0">spec written back into the ticket</span></div>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- preflight -->
+  <div class="phase pre">
+    <div class="phase-h"><span class="tag">Phase 2 · before any ticket</span><span class="ttl">Preflight — fail fast</span><span class="meta">a single failure stops the whole run</span></div>
+    <div class="preflight">
+      <span class="chk">git repo?</span>
+      <span class="chk"><code>gh</code> authed?</span>
+      <span class="chk">origin remote?</span>
+      <span class="chk">Linear reachable?</span>
+      <span class="chk">sandbox present &amp; executable?</span>
+      <span class="chk">resolve repo root + base branch</span>
+      <span class="chk">ignore <code>.worktrees/</code> locally</span>
+      <span class="chk">resolve the MANUAL</span>
+    </div>
+    <p class="note">The MANUAL is the first existing of <code>CONTEXT.md</code> / <code>CLAUDE.md</code> / <code>AGENTS.md</code>, resolved once and reused for every ticket in the run.</p>
+  </div>
+
+  <!-- run -->
+  <div class="phase">
+    <div class="phase-h"><span class="tag">Phase 2 · per ticket</span><span class="ttl">/wf-run — autonomous</span><span class="meta">sequential by default · isolated in ROOT/.worktrees/&lt;id&gt;</span></div>
+    <div class="flow">
+      <div class="step"><div class="rail"><div class="node"></div><div class="seg"></div></div><div class="body">
+        <div class="act"><span class="pill">git worktree + branch</span><span class="arr">→</span><span class="mono">ticket-id/slug</span><span class="note" style="margin:0">from origin/BASE · reused if it already exists (resumable)</span></div>
+      </div></div>
+      <div class="step"><div class="rail"><div class="node"></div><div class="seg"></div></div><div class="body">
+        <div class="act"><span class="pill ha">wf-linear</span><span class="arr">SET_STATUS</span><span class="pill">In Progress</span><span class="note" style="margin:0">only AFTER the worktree exists</span></div>
+      </div></div>
+      <div class="step"><div class="rail"><div class="node"></div><div class="seg"></div></div><div class="body">
+        <div class="act"><span class="pill ha">wf-github</span><span class="arr">PR_HISTORY</span><span class="arr">→</span><span class="pill op">wf-planner</span></div>
+        <p class="note">Emits <b>CONTEXT_PACK</b> (files, patterns, commands, gotchas) — threaded into every agent below so <b>none re-explores the codebase</b>. Also reports <code>SPEC_GAPS</code> &amp; <code>MANUAL_DRIFT</code>. The orchestrator extracts the ticket's <code>## Acceptance criteria</code> and hands it to reviewer + verifier.</p>
+      </div></div>
+      <div class="step"><div class="rail"><div class="node"></div><div class="seg"></div></div><div class="body">
+        <div class="act"><span class="pill so">wf-executor</span><span class="note" style="margin:0">implements the plan · atomic commits · surfaces new deps</span></div>
+      </div></div>
+      <div class="step"><div class="rail"><div class="node"></div><div class="seg"></div></div><div class="body">
+        <div class="act"><span class="pill op">wf-reviewer</span><span class="loop">⟲ blocking? → executor fixes (≤2 rounds, then surfaced to you)</span></div>
+      </div></div>
+      <div class="step"><div class="rail"><div class="node"></div><div class="seg"></div></div><div class="body">
+        <div class="act"><span class="pill so">wf-verifier</span><span class="loop">⟲ tests/build fail? → executor fixes (≤2 rounds, then surfaced to you)</span></div>
+      </div></div>
+      <div class="step"><div class="rail"><div class="node"></div><div class="seg"></div></div><div class="body">
+        <div class="act"><span class="guard">empty-PR guard — commits beyond base? no → STOP, leave In Progress, report</span></div>
+      </div></div>
+      <div class="step"><div class="rail"><div class="node"></div><div class="seg"></div></div><div class="body">
+        <div class="act"><span class="pill ha">wf-github</span><span class="arr">CREATE_PR</span><span class="note" style="margin:0">push + open PR with a What/Why/Changes/Verification body</span></div>
+      </div></div>
+      <div class="step"><div class="rail"><div class="node"></div></div><div class="body">
+        <div class="act"><span class="pill ha">wf-linear</span><span class="arr">SET_STATUS</span><span class="pill">In Review</span><span class="arr">+ LINK_PR</span></div>
+        <div class="stop"><span class="sq"></span> STOP — PR ready for your review</div>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- parallel -->
+  <div class="phase">
+    <div class="phase-h"><span class="tag">Phase 2 · variant</span><span class="ttl">/wf-run --parallel</span><span class="meta">independent tickets, concurrently · ≤3 at once</span></div>
+    <div class="flow">
+      <div class="step"><div class="rail"><div class="node"></div><div class="seg"></div></div><div class="body">
+        <div class="act"><span class="pill ha">wf-linear</span><span class="arr">FETCH all (∥)</span><span class="arr">→</span><span class="pill">worktrees + In Progress (sequential, cheap)</span></div>
+      </div></div>
+      <div class="step"><div class="rail"><div class="node"></div><div class="seg"></div></div><div class="body">
+        <div class="act"><span class="pill op">wf-planner ×N (∥)</span><span class="loop">non-interactive — <code>SPEC_GAPS</code> → set aside as NEEDS_HUMAN</span></div>
+      </div></div>
+      <div class="step"><div class="rail"><div class="node"></div><div class="seg"></div></div><div class="body">
+        <div class="act"><span class="guard">overlap guard — tickets sharing “files in play” drop to a sequential tail (no races)</span></div>
+      </div></div>
+      <div class="step"><div class="rail"><div class="node"></div><div class="seg"></div></div><div class="body">
+        <div class="act"><span class="pill so">wf-runner ×N</span><span class="note" style="margin:0">each drives one ticket's execute → review → verify (≤3 concurrent); returns DONE / NEEDS_HUMAN / BLOCKED</span></div>
+      </div></div>
+      <div class="step"><div class="rail"><div class="node"></div></div><div class="body">
+        <div class="act"><span class="note" style="margin:0">per <b>DONE</b> ticket the <b>orchestrator</b> does empty-PR guard → <span class="pill ha">wf-github</span> CREATE_PR → <span class="pill ha">wf-linear</span> In Review + LINK_PR. Set-asides are resolved interactively after the batch.</span></div>
+      </div></div>
+    </div>
+    <p class="note">Same hard rules as sequential — safe only because each ticket owns a disjoint worktree, and the overlap guard keeps file sets non-intersecting. <b>All Linear/GitHub mutations stay with the orchestrator</b>; runners never touch them.</p>
+  </div>
+
+  <!-- merge -->
+  <div class="phase merge">
+    <div class="phase-h"><span class="tag">On merge</span><span class="ttl">only when you say “ENG-123 is merged”</span></div>
+    <div class="act">
+      <span class="pill ha">wf-github PR_STATUS</span><span class="arr">confirms MERGED →</span>
+      <span class="pill ha">wf-linear</span><span class="pill">Done</span><span class="arr">→</span>
+      <span class="pill">worktree + branch removed</span>
+    </div>
+    <p class="note">The pipeline <b>never merges, waits for checks, or sets Done on its own.</b> Cleanup happens only after you confirm — and only once <code>wf-github</code> confirms MERGED. A failed ticket keeps its worktree for inspection.</p>
+  </div>
+
+  <!-- WHY SMART & CHEAP -->
+  <h2>Smart &amp; cheap — the context strategy</h2>
+  <p class="sub" style="margin-top:-6px">Distill · target · cache · pass-forward — never dump, broadcast, re-derive, or regenerate.</p>
+  <div class="feat">
+    <div class="f"><h3>Pass forward, don't re-derive</h3><p>The Opus planner explores once and hands a <b>Context Pack</b> downstream. Executor/reviewer/verifier inherit it instead of re-reading the repo every loop — net token <i>savings</i>.</p></div>
+    <div class="f"><h3>Amortized manual</h3><p><code>CONTEXT.md</code> is built once and reused across every ticket in every run. Personas live in cached system prompts → ~free at runtime.</p></div>
+    <div class="f"><h3>Single-owner boundaries</h3><p>Only <code>wf-linear</code> / <code>wf-github</code> touch external systems. The orchestrator pre-fetches and passes data down, keeping every other agent plumbing-free.</p></div>
+    <div class="f"><h3>Self-improving</h3><p><code>SPEC_GAPS</code> teaches the wf-spec-builder; <code>MANUAL_DRIFT</code> nudges you to re-prime when <code>CONTEXT.md</code> goes stale. The system flags its own gaps.</p></div>
+  </div>
+
+  <!-- SECURITY -->
+  <h2>Security &amp; sandboxing</h2>
+  <p class="sub" style="margin-top:-6px">Untrusted ticket text in + arbitrary test/build execution = a "lethal trifecta". All project code runs sandboxed.</p>
+  <div class="feat">
+    <div class="f"><h3><code>wf-exec</code> wrapper</h3><p>Runs project code under a macOS seatbelt profile: <b>external network blocked</b> (loopback OK for local tests), and <code>~/.ssh</code>/<code>~/.aws</code>/<code>~/.gnupg</code>/<code>gh</code> creds unreadable. A malicious test or <code>postinstall</code> can't phone home.</p></div>
+    <div class="f"><h3>Executor &amp; verifier comply</h3><p>Every test/build/lint/install runs through <code>wf-exec</code>. New dependencies are surfaced to you before merge.</p></div>
+    <div class="f"><h3>Enforcement hook</h3><p>A <code>PreToolUse</code> guard <b>blocks</b> unwrapped test/build commands in a worktree — defense-in-depth, not just instructions. Fails <i>open</i> on any uncertainty; ignores <code>git</code>/<code>gh</code>.</p></div>
+    <div class="f"><h3>Egress only at the edges</h3><p>Only <code>wf-linear</code>/<code>wf-github</code> reach the network (Linear/GitHub). Nothing else does.</p></div>
+    <div class="f"><h3>Design-handoff ingestion</h3><p>File-embeds on a ticket are downloaded by the orchestrator via <code>wf-fetch-handoff</code> (Linear-host allowlist, https-only, size-capped, zip-slip-guarded) into a path <b>outside</b> the worktree — never in the diff. Strictly <b>reference-only</b>: agents recreate the intent, never copy its files.</p></div>
+  </div>
+
+  <!-- EVALS -->
+  <h2>Evals — the regression gate</h2>
+  <p class="sub" style="margin-top:-6px"><code>/wf-eval</code> catches silent quality drops when you tune a prompt, model, or the flow. Fully offline.</p>
+  <div class="feat">
+    <div class="f"><h3>Fixtures</h3><p>Tiny dependency-free git repos (<code>node-toy</code>, <code>py-toy</code>) whose stdlib tests run inside the no-network sandbox. Reset clean between stages.</p></div>
+    <div class="f"><h3>Seed cases + rubrics</h3><p>Four: <code>node-feature</code>, <code>node-bugfix</code>, <code>py-feature</code>, and <code>ambiguous-spec</code> — which checks the planner <i>refuses to invent scope</i> (and stays non-interactive in eval mode).</p></div>
+    <div class="f"><h3>Stage evals</h3><p><b>plan</b> judges the planner's output; <b>execute</b> judges the executor's diff + whether the fixture tests actually pass (sandboxed).</p></div>
+    <div class="f"><h3>Judge + baseline</h3><p><code>wf-judge</code> scores each (gate, then 0–1, weighting observed test results highest); the runner flags regressions vs the saved baseline (PASS→FAIL or score drop &gt; 0.15).</p></div>
+    <div class="f"><h3>Trusting the judge</h3><p><code>/wf-calibrate</code> grades <code>wf-judge</code> against a human-labeled gold set — agreement (bar ≥90%), FAIL precision/recall, bias probes — so the gate itself is trustworthy. Re-run after changing the judge.</p></div>
+  </div>
+
+  <!-- INVARIANTS -->
+  <h2>Firm invariants</h2>
+  <ul class="inv">
+    <li><b class="key">Never</b> merges, waits for checks, or sets Linear <b>Done</b> autonomously — that needs your explicit go-ahead, after <code>wf-github</code> confirms MERGED.</li>
+    <li>Branch naming <code>ticket-id/slug</code>; worktrees in <code>ROOT/.worktrees/</code> — kept on failure, removed on merge.</li>
+    <li>Each ticket isolated in its own worktree — sequential by default, or concurrent under <code>--parallel</code> (≤3, file-disjoint) — never PR-stacked on another ticket's unmerged work.</li>
+    <li>Refined spec is written to the Linear <b>ticket description</b> — no <code>.planning/</code> files anywhere.</li>
+    <li>PR descriptions are concise &amp; high-fidelity (What / Why / Changes / Verification). No filler.</li>
+    <li>All project code runs <b>sandboxed</b> via <code>wf-exec</code>; executor commits carry a <code>Co-Authored-By: Claude</code> trailer.</li>
+    <li>Everything obeys global <code>CLAUDE.md</code>: surgical, simple, goal-driven.</li>
+  </ul>
+
+  <footer>Ticket Workflow Framework · system runs from <code>~/.claude</code> (agents + commands self-register each session) · docs live in this project directory · this artifact is documentation, the files are the source of truth.</footer>
+
+</div>
+</body>
+</html>

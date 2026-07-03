@@ -1,0 +1,24 @@
+(version 1)
+;; Ticket-workflow execution sandbox (macOS seatbelt).
+;; Used to run a repo's tests/build/lint/install during /run-tickets so that
+;; attacker-influenceable project code (test files, postinstall hooks, deps)
+;; cannot exfiltrate data or read host credentials.
+;; Allow everything by default, then carve out the dangerous capabilities.
+(allow default)
+
+;; --- Network: block external egress (exfiltration), keep loopback + unix sockets ---
+;; so local integration tests (servers on 127.0.0.1, unix sockets) still work.
+(deny network-outbound)
+(allow network-outbound (remote ip "localhost:*"))
+(allow network-outbound (remote unix-socket))
+(allow network-bind (local ip "localhost:*"))
+(allow network-inbound (local ip "localhost:*"))
+
+;; --- Secrets: deny reading host credential stores into the process ---
+(deny file-read*
+  (subpath "__HOME__/.ssh")
+  (subpath "__HOME__/.aws")
+  (subpath "__HOME__/.gnupg")
+  (subpath "__HOME__/.config/gh")
+  (subpath "__HOME__/.config/git")
+  (subpath "__HOME__/.netrc"))

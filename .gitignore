@@ -1,0 +1,15 @@
+# Eval fixtures are git repos created at install time by setup-fixtures.sh.
+# Never commit their nested .git dirs (they'd leak author identity and confuse the
+# outer repo). The fixture *source files* are tracked; their .git is not.
+ticket-workflow-evals/fixtures/*/.git/
+
+# Local worktrees the workflow creates when running tickets
+.worktrees/
+
+# OS / editor noise
+.DS_Store
+*.swp
+
+# Python bytecode from running fixtures
+__pycache__/
+*.pyc

@@ -1,0 +1,46 @@
+#!/bin/bash
+# wf-exec — run a command inside the ticket-workflow execution sandbox.
+# No external network egress; host credential stores unreadable. Loopback + writes allowed.
+# A watchdog kills the command if it runs longer than WF_EXEC_TIMEOUT seconds (default 540,
+# set 0 to disable) and says so clearly — a hang here almost always means the command needs
+# the network the sandbox denies (e.g. `pub get`, `npm install`). Dependencies are warmed
+# offline at worktree setup, so a hang usually means a package isn't in the local cache.
+# Usage: wf-exec <command> [args...]   e.g.  wf-exec npm test
+set -uo pipefail
+
+# Quiet common CLI telemetry so it can't add latency/noise on every invocation.
+export DO_NOT_TRACK=1                    # broad cross-tool opt-out standard
+export FLUTTER_SUPPRESS_ANALYTICS=true   # Flutter predates DO_NOT_TRACK; needs its own
+
+PROFILE="$HOME/.claude/ticket-workflow-sandbox.sb"
+TIMEOUT="${WF_EXEC_TIMEOUT:-540}"
+case "$TIMEOUT" in ''|*[!0-9]*) TIMEOUT=540 ;; esac
+
+if [ "$TIMEOUT" -eq 0 ]; then
+  exec /usr/bin/sandbox-exec -f "$PROFILE" "$@"
+fi
+
+kill_tree() {
+  local p=$1 sig=${2:-TERM} c
+  for c in $(pgrep -P "$p" 2>/dev/null); do kill_tree "$c" "$sig"; done
+  kill "-$sig" "$p" 2>/dev/null
+}
+
+/usr/bin/sandbox-exec -f "$PROFILE" "$@" &
+cmd_pid=$!
+
+( sleep "$TIMEOUT"
+  echo "wf-exec: TIMEOUT after ${TIMEOUT}s — killed. Likely needs network the sandbox denies (e.g. pub get / npm install); deps are warmed offline at setup, so a hang here usually means a package isn't in the local cache. Override with WF_EXEC_TIMEOUT=<seconds>." >&2
+  kill_tree "$cmd_pid" TERM
+  sleep 5
+  kill_tree "$cmd_pid" KILL
+) &
+watch_pid=$!
+
+wait "$cmd_pid"; status=$?
+# Tear down the whole watchdog subtree (the subshell AND its `sleep` child) — killing
+# only the subshell would orphan `sleep`, which keeps inherited stdout/stderr FDs open and
+# hangs a downstream pipe consumer (e.g. `wf-exec ... | tail`) that's waiting for EOF.
+kill_tree "$watch_pid" TERM
+wait "$watch_pid" 2>/dev/null
+exit "$status"

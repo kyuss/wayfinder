@@ -1,0 +1,61 @@
+#!/bin/bash
+# wf-fetch-handoff — download a Linear file-embed (design handoff zip, etc.) and unpack it
+# for the ticket workflow. It pulls UNTRUSTED ticket content, so it is deliberately strict:
+# Linear-host allowlist, https-only, no redirects, size-capped, zip-slip-guarded — and it
+# NEVER executes anything it downloads (the content is read by agents as reference only).
+# Runs UNSANDBOXED (orchestrator side): the download needs network; the executor never does.
+#
+# Usage: wf-fetch-handoff <dest-dir> <url> [<expected-bytes>]
+# On success prints the absolute path of the unpacked dir (zip) or saved file, and exits 0.
+# On any failure prints a reason to stderr and exits non-zero — callers treat the handoff
+# as absent and proceed (ingestion is best-effort, never blocks a ticket).
+#
+# NOTE: Linear signed URLs expire ~5 min after the issue is fetched. Download promptly.
+
+set -euo pipefail
+
+dest=${1:?usage: wf-fetch-handoff <dest-dir> <url> [expected-bytes]}
+url=${2:?usage: wf-fetch-handoff <dest-dir> <url> [expected-bytes]}
+expected=${3:-}
+
+MAX_BYTES=26214400  # 25 MiB — handoffs are small; caps runaway/zip-bomb downloads.
+
+# 1) Host allowlist + scheme: the href comes from ticket text and is attacker-controllable.
+case "$url" in https://*) : ;; *) echo "wf-fetch-handoff: only https URLs allowed" >&2; exit 2 ;; esac
+host=$(printf '%s' "$url" | sed -E 's#^https://([^/]+)/.*#\1#')
+case "$host" in
+  uploads.linear.app|*.linear.app) : ;;
+  *) echo "wf-fetch-handoff: refusing non-Linear host '$host'" >&2; exit 2 ;;
+esac
+
+mkdir -p "$dest"
+tmp=$(mktemp "${TMPDIR:-/tmp}/wf-handoff.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+
+# 2) Download: https only, no redirect-following (avoids SSRF via 3xx), size+time capped.
+http=$(curl -fsS --proto '=https' --max-filesize "$MAX_BYTES" --max-time 60 \
+  -o "$tmp" -w '%{http_code}' "$url" 2>/dev/null) || {
+  echo "wf-fetch-handoff: download failed (http=${http:-?}) — signed link may be expired (~5 min TTL)" >&2
+  exit 3
+}
+
+# 3) Integrity: byte count must match the embed's declared size, when provided.
+if [ -n "$expected" ]; then
+  actual=$(wc -c < "$tmp" | tr -d ' ')
+  [ "$actual" = "$expected" ] || { echo "wf-fetch-handoff: size mismatch (got $actual, expected $expected)" >&2; exit 4; }
+fi
+
+# 4) Unpack zips with zip-slip protection; otherwise keep the raw file.
+if [ "$(file -b --mime-type "$tmp")" = "application/zip" ]; then
+  # zipinfo -1 prints full entry names one per line (safe with spaces); reject escapes.
+  if unzip -Z1 "$tmp" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
+    echo "wf-fetch-handoff: archive contains unsafe paths (zip-slip) — refusing" >&2; exit 5
+  fi
+  unzip -qq -o "$tmp" -d "$dest" -x '__MACOSX/*' >/dev/null
+  echo "$dest"
+else
+  name=$(basename "${url%%\?*}")
+  [ -n "$name" ] || name=handoff.bin
+  cp "$tmp" "$dest/$name"
+  echo "$dest/$name"
+fi

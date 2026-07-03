@@ -1,0 +1,27 @@
+{
+  "_comment": "Merge these two entries into your ~/.claude/settings.json 'hooks' object. If you already have a 'hooks' key, add these into the matching PreToolUse / SubagentStop arrays rather than replacing them. Do NOT paste the outer braces if you already have a hooks block.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $HOME/.claude/hooks/wf-sandbox-guard.sh"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "wf-linear|wf-github",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $HOME/.claude/hooks/wf-boundary-toolcall-guard.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
