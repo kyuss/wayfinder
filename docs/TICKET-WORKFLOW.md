@@ -194,6 +194,13 @@ The workflow ingests untrusted text (Linear ticket descriptions, GitHub PR/commi
 - **Egress stays open only for the boundary agents** — `wf-linear`/`wf-github` talk to Linear/GitHub; nothing else touches the network.
 - *Scope note:* the sandbox restricts network + secret reads, not filesystem writes (writes to `~/.cache`, `/tmp`, `node_modules` are allowed so tools don't break).
 
+**Residual edges (known, defense-in-depth — not airtight).** These layers raise the cost of an attack; they are not a hermetic boundary, and the **human PR review before merge is the real backstop**:
+
+- *Guard is string-scoped, and the shell cwd persists.* The `PreToolUse` guard only inspects the command string and only fires when it contains `/.worktrees/`. A `cd <worktree>` in one Bash call followed by a bare `npm test` in the next call slips past — the shell's working directory persists across calls, but the second command's text carries no worktree path to match on. The wrapped-execution rule in `wf-executor`/`wf-verifier` (instructions, not the hook) is what covers this case.
+- *"Already sandboxed" is a substring check.* The guard treats a command as already-wrapped if `wf-exec` appears anywhere in it, so a command that merely mentions the string is not re-wrapped. Acceptable as defense-in-depth; not a parse-accurate gate.
+- *Seatbelt denies credential files, not mach services.* The profile's `(allow default)` blocks reads of `~/.ssh`/`~/.aws`/`gh` config etc., but does **not** block mach lookups to `securityd` — so `security find-generic-password` under the sandbox can still reach **Keychain** items. And anything a sandboxed process *can* read can be exfiltrated by writing it into the worktree and letting the PR push carry it out (egress-blocked ≠ write-blocked). When auditing the seatbelt deny-list, treat the Keychain explicitly. The pre-merge PR review is the control that catches a diff carrying exfiltrated secrets.
+- *`wf-github` has broad Bash with an authenticated `gh`.* It runs unsandboxed (egress is required to reach GitHub) and holds your `gh` token, and it receives ticket-derived text (the PR title/body it posts) — so an injection surviving into a PR body is talking to a high-privilege agent. Command-scoping it in the agent frontmatter is **not possible** (the subagent `tools:` field takes bare tool names only — `Bash(gh:*)` is a `settings.json`/hook mechanism, not frontmatter), and `gh` can exfiltrate by design regardless (it *is* the token + network). The real control is the same pre-merge PR review; a `PreToolUse` allowlist hook (à la `wf-sandbox-guard.sh`, restricting it to `gh`/`git`/`cd`) is the option if stronger enforcement is ever wanted.
+
 ---
 
 ## Evals & regression gate
