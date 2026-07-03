@@ -65,8 +65,8 @@ an overview; when they disagree, the files win.
 ## Install
 
 ```bash
-git clone https://github.com/<you>/agentic-ticket-workflow
-cd agentic-ticket-workflow
+git clone https://github.com/kyuss/wayfinder
+cd wayfinder
 ./install.sh
 ```
 
