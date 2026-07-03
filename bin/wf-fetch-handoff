@@ -22,7 +22,14 @@ MAX_BYTES=26214400  # 25 MiB — handoffs are small; caps runaway/zip-bomb downl
 
 # 1) Host allowlist + scheme: the href comes from ticket text and is attacker-controllable.
 case "$url" in https://*) : ;; *) echo "wf-fetch-handoff: only https URLs allowed" >&2; exit 2 ;; esac
-host=$(printf '%s' "$url" | sed -E 's#^https://([^/]+)/.*#\1#')
+# Extract the authority stopping at the FIRST '/', '?' or '#'. curl treats '?'/'#' as
+# query/fragment delimiters, so a naive '[^/]+' capture reads past them and lets a host
+# like 'evil.com#.linear.app' or 'evil.com?a=.linear.app' pass the allowlist while curl
+# actually connects to evil.com (SSRF). Also reject userinfo ('@') and an empty authority.
+host=$(printf '%s' "$url" | sed -E 's#^https://([^/?#]*).*#\1#')
+case "$host" in
+  *@*|'') echo "wf-fetch-handoff: refusing malformed authority in URL" >&2; exit 2 ;;
+esac
 case "$host" in
   uploads.linear.app|*.linear.app) : ;;
   *) echo "wf-fetch-handoff: refusing non-Linear host '$host'" >&2; exit 2 ;;
