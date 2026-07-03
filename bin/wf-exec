@@ -12,6 +12,22 @@ set -uo pipefail
 export DO_NOT_TRACK=1                    # broad cross-tool opt-out standard
 export FLUTTER_SUPPRESS_ANALYTICS=true   # Flutter predates DO_NOT_TRACK; needs its own
 
+# --- Secrets: strip credential-bearing vars from the environment ---
+# The .sb profile denies credential *files*, but environment variables pass straight
+# through to attacker-influenceable project code (tests, postinstall hooks, deps). A secret
+# read from the env could be written into the worktree, then committed and pushed out. Drop
+# anything whose NAME looks like a secret (denylist by pattern — keeps arbitrary toolchains
+# working, unlike a strict allowlist that would break PUB_CACHE/CARGO_HOME/etc.). Runs in the
+# current shell (process substitution, not a pipe) so the unsets are inherited by the child.
+while IFS='=' read -r _name _; do
+  case "$_name" in
+    *TOKEN*|*SECRET*|*PASSWORD*|*PASSWD*|*CREDENTIAL*|*APIKEY*|*API_KEY*|*ACCESS_KEY*|*PRIVATE_KEY*|*_KEY|*AUTH*|*_PAT)
+      unset "$_name" 2>/dev/null ;;
+    AWS_ACCESS_KEY_ID|GH_TOKEN|GITHUB_TOKEN|ANTHROPIC_*|OPENAI_*|LINEAR_*|NPM_TOKEN|NODE_AUTH_TOKEN|GOOGLE_APPLICATION_CREDENTIALS|HEROKU_API_KEY|SENTRY_AUTH_TOKEN|DD_API_KEY|CI_JOB_TOKEN)
+      unset "$_name" 2>/dev/null ;;
+  esac
+done < <(env)
+
 PROFILE="$HOME/.claude/ticket-workflow-sandbox.sb"
 TIMEOUT="${WF_EXEC_TIMEOUT:-540}"
 case "$TIMEOUT" in ''|*[!0-9]*) TIMEOUT=540 ;; esac

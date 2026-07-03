@@ -40,9 +40,16 @@ cp "$REPO"/hooks/wf-*.sh       "$CLAUDE/hooks/"
 chmod +x "$CLAUDE"/bin/wf-exec "$CLAUDE"/bin/wf-fetch-handoff "$CLAUDE"/hooks/wf-*.sh
 
 # --- generate the sandbox profile for this machine -----------------------------
-# The seatbelt profile needs literal absolute paths; fill in this user's $HOME.
-sed "s#__HOME__#$HOME#g" "$REPO/ticket-workflow-sandbox.sb.template" \
+# The seatbelt profile needs literal absolute paths; fill in this machine's dirs —
+# __HOME__ = your home, __CLAUDE__ = the Claude config dir (CLAUDE_HOME may relocate it).
+sed -e "s#__CLAUDE__#$CLAUDE#g" -e "s#__HOME__#$HOME#g" "$REPO/ticket-workflow-sandbox.sb.template" \
   > "$CLAUDE/ticket-workflow-sandbox.sb"
+
+# --- learned-gaps data log (append-only; never clobber an existing one) ---------
+# wf-spec-builder reads this as reference examples; /wf-run appends to it when a planner
+# reports SPEC_GAPS. It holds ticket-derived text, so it is DATA, never an agent prompt —
+# seed it empty, once, and leave any existing log (a user's accumulated history) untouched.
+[ -f "$CLAUDE/wf-spec-gaps.md" ] || cp "$REPO/wf-spec-gaps.md" "$CLAUDE/wf-spec-gaps.md"
 
 # --- eval harness --------------------------------------------------------------
 mkdir -p "$CLAUDE/ticket-workflow-evals"
