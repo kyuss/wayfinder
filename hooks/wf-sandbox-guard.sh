@@ -27,4 +27,13 @@ if printf '%s' "$cmd" | grep -Eq '(^|[ &|;(`$])(npm|pnpm|yarn|bun|npx|node|deno|
   exit 2
 fi
 
+# Raw network/exfil binaries: the obvious channel for an injected ticket to curl secrets
+# out (matters most for the opus planner/spec-builder, whose Bash isn't otherwise wrapped).
+# git/gh are excluded above by design; these have no place in sandboxed project code. Same
+# fail-open posture — under the sandbox these still work for loopback but can't reach egress.
+if printf '%s' "$cmd" | grep -Eq '(^|[ &|;(`$])(curl|wget|nc|ncat|netcat|telnet|ssh|scp|sftp|ftp|rsync)([ ]|$)'; then
+  echo "Blocked by workflow sandbox guard: network tools must run through the sandbox (no external egress) so they cannot exfiltrate. Wrap with: $HOME/.claude/bin/wf-exec <command>" >&2
+  exit 2
+fi
+
 exit 0

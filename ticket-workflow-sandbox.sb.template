@@ -21,4 +21,20 @@
   (subpath "__HOME__/.gnupg")
   (subpath "__HOME__/.config/gh")
   (subpath "__HOME__/.config/git")
+  (subpath "__HOME__/.config/gcloud")
+  (subpath "__HOME__/.kube")
+  (subpath "__HOME__/.docker")
+  (subpath "__CLAUDE__")
+  (literal "__HOME__/.npmrc")
   (subpath "__HOME__/.netrc"))
+
+;; ...but the eval harness runs its fixtures IN PLACE under the Claude config dir
+;; (see /wf-eval: `wf-exec bash -c "cd <fixture> && <test>"`). Those are toy repos, not
+;; secrets, and the sandboxed process must at minimum read its own cwd there. Re-allow just
+;; that subtree (later rule wins in SBPL) so the deny above can't brick the evals.
+(allow file-read* (subpath "__CLAUDE__/ticket-workflow-evals"))
+;; Path resolution into that subtree lstat()s the Claude config dir node itself (e.g. Node's
+;; module loader realpathSyncs every ancestor). Allow metadata (stat/traverse) on JUST that
+;; one dir node — not its contents: file reads and readdir/enumeration stay denied, so agent
+;; files and credentials remain unreadable while traversal can pass through.
+(allow file-read-metadata (literal "__CLAUDE__"))

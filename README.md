@@ -43,8 +43,11 @@ an overview; when they disagree, the files win.
   touches GitHub. A `SubagentStop` hook blocks either from finishing without a real
   tool call (no fabricated answers).
 - **Sandboxed execution.** All project code runs through `wf-exec` — no network
-  egress, no credential reads — and a `PreToolUse` hook blocks unwrapped commands
-  inside worktrees. This breaks the "lethal trifecta" (untrusted ticket text + repo
+  egress, no credential-file reads, and secret-shaped env vars (`*TOKEN*`, `*_KEY`,
+  `AWS_*`, …) are stripped before it runs. A `PreToolUse` hook blocks unwrapped
+  project-code *and* raw network binaries (`curl`/`wget`/`ssh`/…) inside worktrees,
+  and the Opus planner/spec-builder have `WebFetch` removed (they ingest untrusted
+  ticket text). This breaks the "lethal trifecta" (untrusted ticket text + repo
   secrets + exfiltration path).
 - **Never autonomous on irreversible steps.** No merging, no waiting on checks, no
   setting Done — a human always closes the loop.

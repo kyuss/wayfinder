@@ -42,7 +42,7 @@ Parse the case file: `id`, `fixture` (relative to `EVAL`), `stages`, the `## TIC
 - Print a table: `case | stage | PASS/FAIL | score | biggest weakness`.
 - Compute the mean score and pass-rate.
 - **Compare to baseline:** if `EVAL/baselines/baseline.md` exists, diff each case/stage verdict against it and flag any **regression** (was PASS now FAIL, or score dropped > 0.15). If there are regressions, say so loudly — that's the signal a recent agent/model/flow change degraded the pipeline.
-- Save this run to `EVAL/baselines/run-<today>.md`. Offer to promote it to `baseline.md` (only do so on explicit user confirmation — never overwrite the baseline silently).
+- Save this run to `EVAL/baselines/run-<today>.md` — but **never overwrite an existing run record**: if that file already exists (a same-day rerun), save to `run-<today>-<HHMMSS>.md` instead (e.g. `date +%Y-%m-%d-%H%M%S`) so each run is preserved as immutable history. Then offer to promote it to `baseline.md` (only do so on explicit user confirmation — never overwrite the baseline silently). `baseline.md` is the moving gold pointer the gate diffs against; the dated `run-*.md` files are the permanent per-run archive and are never pruned.
 
 ## Notes
 - Stage evals isolate *which* agent regressed. The spec stage is independent (it consumes only the raw TICKET); the execute stage currently consumes the planner's plan (so a plan regression can cascade) — acceptable for a quick gate; pin a reference plan per case later if you want full isolation.
