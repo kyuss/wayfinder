@@ -45,6 +45,7 @@ The wrapper blocks external network egress and host-credential reads (loopback +
 ## Atomic commits
 
 - One logical change per commit. Commit message: terse, imperative, what+why in one line. No fluff.
+- If a commit message would name a sandboxed tool (`flutter`, `dart`, `cargo`, `node`, `npm`, `pytest`, `make`, `go`, …), commit with `git commit -F <tmpfile>` (write the message to a file outside the worktree) instead of `-m "…"`. You're cwd'd in `<worktree>`, so `/.worktrees/` is in the command and the sandbox guard substring-matches those tool names in the `-m` prose — a false block. Keeping the message off the command line (or just not naming the tool in the subject) avoids it.
 - Do NOT push (the orchestrator pushes) and do NOT open PRs.
 - End every commit message with an attribution trailer (blank line before it):
 

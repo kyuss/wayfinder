@@ -75,7 +75,7 @@ The offline flag is **required** — without it the tool probes the network firs
 ### 7. PR
 - **Guard against an empty PR:** confirm the branch actually has commits beyond base — `git -C "<path>" rev-list --count "origin/<BASE>..HEAD"` must be > 0. If it's 0 (executor made no changes), do NOT open a PR — stop this ticket, leave it In Progress, and report it so the user can investigate.
 - Build the PR title and body from the template below.
-- Spawn `wf-github`: `CREATE_PR` with the worktree path, BASE, HEAD (`<branch>`), title, and body. It pushes the branch and opens the PR. Capture the returned `PR_URL`.
+- Spawn `wf-github`: `CREATE_PR` with the worktree path, BASE, HEAD (`<branch>`), title, and body. It pushes the branch and opens the PR (via `--body-file`, so tool names in the body prose don't trip the sandbox guard). Capture the returned `PR_URL`.
 
 ### 8. Hand off to review
 - Spawn `wf-linear`: `SET_STATUS <identifier> "In Review"`.

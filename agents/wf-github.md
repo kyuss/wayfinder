@@ -36,7 +36,9 @@ Keep it to high-signal items only — this is fuel for the planner/wf-spec-build
 ### CREATE_PR
 Given: worktree path, BASE branch, HEAD branch, title, body (markdown). Publish and open the PR:
 1. `cd <worktree>` then `git push -u origin <HEAD>` (if already pushed, that's fine).
-2. `gh pr create --base "<BASE>" --head "<HEAD>" --title "<title>" --body "<body>"`.
+2. Write the body markdown to a temp file **outside the worktree** (`f=$(mktemp)`; write the body to `$f`) and pass it with `--body-file`:
+   `gh pr create --base "<BASE>" --head "<HEAD>" --title "<title>" --body-file "$f"`.
+   **Never pass the body inline with `--body`.** The `cd <worktree>` puts `/.worktrees/` in the command, which engages the sandbox guard; the guard does a substring match for sandboxed-tool names (`flutter`, `cargo`, `node`, `make`, …), so any such word in the body prose (e.g. "run `flutter analyze`") would falsely block the whole `gh pr create`. `--body-file` keeps prose off the command line entirely, so there is nothing to match. (`mktemp` lives outside the worktree, so its path doesn't enter the diff.)
 Return:
 ```
 PR_URL: <url>
