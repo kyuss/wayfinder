@@ -32,6 +32,16 @@ When asked to change "the workflow," "an agent," or "a command," you are editing
 
 For a token-cheap orientation before diving into the files below, read `./CONTEXT.md` — the distilled operating manual the ticket-workflow agents reuse across tickets.
 
+## This repo IS the version-controlled source — `~/.claude/` is a deployed copy
+
+`install.sh` copies **this repo → `~/.claude/`** (one-way: `agents/`, `commands/`, `bin/`, `hooks/`, and the whole `ticket-workflow-evals/`). So:
+
+- The files that **auto-load into every session** and actually run are the ones under `~/.claude/` (the live copy). That's why you edit/operate there.
+- The files that are **version-controlled** are the ones in *this* repo. `~/.claude/` is **not** a git repo — changes made there show up in **no** `git status` until you copy them back here.
+- **To commit any change that originated in `~/.claude/`, sync it back into this repo's mirror first, then `git add`/commit.** Don't conclude "nothing to commit" from a clean `git status` in this repo alone — check the live copy too (`diff -rq ~/.claude/<dir> ./<dir>`).
+
+**Eval outputs are the common case of this.** `/wf-eval` uses `EVAL=~/.claude/ticket-workflow-evals`, so every run record (`baselines/run-<date>.md`) and any `baseline.md` promotion lands in the **deployed** copy, never here. Committing eval results = `cp ~/.claude/ticket-workflow-evals/baselines/{baseline.md,run-*.md} ./ticket-workflow-evals/baselines/` → commit. (This bit me once: I reported "nothing to commit" because I'd only looked at this repo's clean status.)
+
 ## The agents (`~/.claude/agents/`)
 
 **Reasoning agents** — `wf-spec-builder` (opus, interactive: ticket → implementation-ready spec), `wf-planner` (opus: spec → surgical plan + forward Context Pack), `wf-executor` (sonnet: implements plan, atomic commits), `wf-reviewer` (opus: reviews diff, high bar for blocking), `wf-verifier` (sonnet: runs tests/build/lint, proves acceptance criteria), `wf-cartographer` (sonnet: one-time, writes a repo's `CONTEXT.md` manual).
