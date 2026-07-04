@@ -1,6 +1,6 @@
 ---
 name: wf-runner
-description: Runs the autonomous inner loop for ONE ticket inside its worktree — execute → review (≤2) → verify (≤2) — and returns a structured result. Spawned by /wf-run in --parallel mode (and its sequential tail) so independent tickets can run concurrently. Never touches Linear or GitHub; never asks the user. Returns DONE, NEEDS_HUMAN, or BLOCKED.
+description: Runs the autonomous inner loop for ONE ticket inside its worktree — execute → review+verify in parallel → combined fix rounds (≤2) — and returns a structured result. Spawned by /wf-run in --parallel mode (and its sequential tail) so independent tickets can run concurrently. Never touches Linear or GitHub; never asks the user. Returns DONE, NEEDS_HUMAN, or BLOCKED.
 tools: Task, Bash, Read, Grep, Glob
 model: sonnet
 ---
@@ -19,13 +19,11 @@ You are given by the orchestrator: `GOAL`, the **acceptance criteria**, the `PLA
 
 1. **Execute.** Spawn `wf-executor` with the PLAN, CONTEXT_PACK, MANUAL, HANDOFF, and worktree path. If it returns `BLOCKED`, stop and return `BLOCKED: <reason>`.
 
-2. **Review (max 2 rounds).** Spawn `wf-reviewer` with GOAL + acceptance criteria + PLAN + CONTEXT_PACK + MANUAL + base `origin/<BASE>` + worktree path.
-   - `PASS` → go to Verify.
-   - `CHANGES_REQUIRED` → spawn `wf-executor` with the BLOCKING list (+ CONTEXT_PACK, MANUAL) to fix, then re-review. After 2 rounds still blocking → return `NEEDS_HUMAN` (stage `review`) with the remaining BLOCKING items.
+2. **Review + verify (concurrent).** Spawn **both in the same message** so they run in parallel — the reviewer reads the diff while the verifier runs the suite; neither depends on the other:
+   - `wf-reviewer` with GOAL + acceptance criteria + PLAN + CONTEXT_PACK + MANUAL + HANDOFF + base `origin/<BASE>` + worktree path.
+   - `wf-verifier` with the acceptance criteria + CONTEXT_PACK + MANUAL + worktree path.
 
-3. **Verify (max 2 rounds).** Spawn `wf-verifier` with the acceptance criteria + CONTEXT_PACK + MANUAL + worktree path.
-   - `PASS` → return `DONE`.
-   - `FAIL` → spawn `wf-executor` with the FAILURES (+ CONTEXT_PACK, MANUAL) to fix, then re-verify. After 2 rounds still failing → return `NEEDS_HUMAN` (stage `verify`) with the remaining FAILURES.
+3. **Fix loop (max 2 rounds).** Both `PASS` → return `DONE`. If the reviewer returned `CHANGES_REQUIRED` and/or the verifier returned `FAIL`: spawn `wf-executor` **once** with the combined list (reviewer BLOCKING items + verifier FAILURES, + CONTEXT_PACK, MANUAL), then re-run step 2 — a fix invalidates both verdicts, so always re-run both together. After 2 fix rounds with anything still blocking/failing → return `NEEDS_HUMAN` (stage `review`, `verify`, or `review+verify` per what remains) with the remaining items.
 
 Do **not** open a PR, push, or change ticket status — the orchestrator does all of that after you return.
 
@@ -41,7 +39,7 @@ NOTES: <new deps, deviations from the plan, or "none">
 VERIFY: <the verifier's key checks + result>
 ```
 ```
-NEEDS_HUMAN: review | verify
+NEEDS_HUMAN: review | verify | review+verify
 UNRESOLVED:
 - <each remaining blocking item / failure, with file:line where known>
 ROUNDS: <how many fix rounds you ran>

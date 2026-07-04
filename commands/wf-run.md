@@ -52,7 +52,7 @@ Project code runs with **no network** under `wf-exec`, but most stacks resolve d
 The offline flag is **required** — without it the tool probes the network first and the sandbox makes it hang. **Don't loop on failure:** if offline resolution fails (a package isn't cached — typically because the ticket adds a *new* dependency), note it once and either ask the user to warm the cache (build the project normally outside the workflow), or proceed and let the executor flag the missing dep in `NOTES`. **Skip** this step when there's no recognizable manifest, or on a resume where the worktree's dependency dir is already populated. Code generation and all tests stay with the executor/verifier under `wf-exec` — they need no network once deps are cached. **Resolution caveat:** many toolchains re-resolve dependencies over the network *before* each run (e.g. `flutter test` triggers an implicit pub get; some test runners auto-install), so downstream commands must use the offline / skip-resolution form (`--offline`, `--no-pub`, `--frozen-lockfile`, …). The repo manual should document those forms; if it only lists bare commands, note it so the executor/verifier add the offline flag.
 
 ### 3. Plan
-- Spawn `wf-github`: `PR_HISTORY <keywords/paths from the ticket>` → a digest of how related work was done/merged here.
+- Spawn `wf-github`: `PR_HISTORY <keywords/paths from the ticket>` → a digest of how related work was done/merged here. (This is independent of step 2b's dependency warm — kick it off alongside, so the digest is ready when you spawn the planner.)
 - Spawn `wf-planner` with: the enriched ticket, BASE, the worktree path, `MANUAL`, the PR_HISTORY digest, and `HANDOFF` (reference-only design handoff path, or `none`). It returns one of two things, tagged on its first line:
   - **`STATUS: NEEDS_INPUT`** — the planner is blocked (the spec left a real decision open). It can't reach the user, so **you** ask via AskUserQuestion: map each returned question block (`header`/`question`/`multiSelect`/`options`) to a question, options in order with the `(recommended)` one first and labeled "(Recommended)". Then **re-spawn `wf-planner`** with the *same* inputs **plus** an `ANSWERS:` section pairing each question with the user's choice (verbatim, including any "Other" free-text). Loop until it returns a plan. (Normally 0–1 rounds; a well-spec'd ticket asks nothing. If still asking after ~3 rounds, surface that to the user and ask whether to push through with current defaults.)
   - **`STATUS: PLAN`** — the plan: `GOAL`, a `CONTEXT_PACK`, `PLAN`, `TESTS`, `RISKS`, `SPEC_GAPS`, and `MANUAL_DRIFT`. Strip the status line. **Keep the CONTEXT_PACK** — it's threaded into every downstream agent so they don't re-explore. (Thread `HANDOFF` to the executor too.)
@@ -63,13 +63,14 @@ The offline flag is **required** — without it the tool probes the network firs
 - Spawn `wf-executor` with the PLAN, CONTEXT_PACK, MANUAL, `HANDOFF` (reference-only, or `none`), and worktree path. It makes atomic commits on the branch and returns what it changed.
 - If it returns `BLOCKED`, surface to the user and stop this ticket.
 
-### 5. Review loop (max 2 iterations)
-- Spawn `wf-reviewer` with: the `GOAL` + **acceptance criteria** + the `PLAN` (so it can judge whether the diff satisfies them), the diff base `origin/<BASE>`, CONTEXT_PACK, MANUAL, and worktree path.
-- If `CHANGES_REQUIRED`: spawn `wf-executor` with the BLOCKING list (+ CONTEXT_PACK, MANUAL) to fix, then re-review. After 2 rounds still blocking, surface the remaining items to the user via AskUserQuestion (Fix manually / Continue anyway / Stop).
+### 5. Review + verify (concurrent)
+- Spawn **both at once** (same message, two Task calls) — the reviewer reads the diff while the verifier runs the suite; neither depends on the other, and overlapping them cuts wall-clock and lets one fix pass address both result sets:
+  - `wf-reviewer` with: the `GOAL` + **acceptance criteria** + the `PLAN` (so it can judge whether the diff satisfies them), the diff base `origin/<BASE>`, CONTEXT_PACK, MANUAL, `HANDOFF` (reference-only, or `none`), and worktree path.
+  - `wf-verifier` with: the acceptance criteria, CONTEXT_PACK (for the exact commands), MANUAL, and worktree path.
 
-### 6. Verify loop (max 2 iterations)
-- Spawn `wf-verifier` with the acceptance criteria, CONTEXT_PACK (for the exact commands), MANUAL, and worktree path.
-- If `FAIL`: spawn `wf-executor` with the FAILURES (+ CONTEXT_PACK, MANUAL) to fix, then re-verify. After 2 rounds still failing, surface to the user (same three options).
+### 6. Fix loop (max 2 rounds)
+- If the reviewer returned `CHANGES_REQUIRED` and/or the verifier returned `FAIL`: spawn `wf-executor` **once** with the combined fix list (reviewer BLOCKING items + verifier FAILURES, + CONTEXT_PACK, MANUAL), then re-run step 5 — a fix invalidates both verdicts, so re-run both together.
+- After 2 fix rounds with anything still blocking/failing, surface the remaining items to the user via AskUserQuestion (Fix manually / Continue anyway / Stop).
 - **Collect any `GATE REQUIRED` lines** the verifier emits — warranted-but-sandbox-infeasible suites (integration/e2e/device tests) it decided are needed but couldn't run here. These do **not** block PASS or the PR; carry them into the PR body's **Pre-merge gates** section (step 7) and into the final report, so review/CI runs them before merge.
 
 ### 7. PR
@@ -179,5 +180,5 @@ Never clean up a worktree whose PR has not been confirmed merged.
 - **Tickets are independent.** Each ticket branches from `origin/<BASE>`; a ticket cannot build on another ticket's unmerged work (no PR stacking). If two tickets depend on each other, run and merge the first before the second.
 - **Parallel mode prevents racing, not stacking.** The overlap guard (P4) serializes tickets that touch the same files so they don't clobber each other concurrently — but they still each branch from base, so an overlapping pair can still conflict at *merge*. That's the pre-existing no-stacking limitation, unchanged.
 - **Parallel mode's overlap guard is only as good as the planner's `files in play`.** A file the planner didn't foresee can still collide. The empty-PR guard and merge conflicts are the backstops.
-- **`wf-runner` is the canonical inner loop** (execute → review → verify) for parallel mode; the sequential path (steps 4–6) still inlines the same loop. They share the same 2-round policy deliberately; if you change one, mirror the other (or later unify sequential onto `wf-runner`).
+- **`wf-runner` is the canonical inner loop** (execute → concurrent review+verify → combined fix rounds, ≤2) for parallel mode; the sequential path (steps 4–6) still inlines the same loop. They share the same policy deliberately; if you change one, mirror the other (or later unify sequential onto `wf-runner`).
 - **`~/.claude/wf-spec-gaps.md`** is the append-only learned-gaps data log (read by `wf-spec-builder` as reference examples, not instructions); prune it occasionally if it grows large. Ticket-derived gap text goes here, never into an agent instruction file.

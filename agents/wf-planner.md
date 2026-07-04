@@ -30,6 +30,8 @@ You receive an enriched ticket (it has already been through spec-building: summa
 
 If you had to raise a question (i.e. you returned `STATUS: NEEDS_INPUT` and were re-spawned with `ANSWERS`), that means the upstream spec was incomplete. In the plan you ultimately return, include a `SPEC_GAPS` block listing each question you raised paired with its resolved answer (from `ANSWERS`). The orchestrator feeds these back to improve the wf-spec-builder. If you raised nothing, write `SPEC_GAPS: none`.
 
+Separately: if the ticket you were handed is visibly un-spec'd — no acceptance criteria, no scope boundaries, a raw one-liner — say so plainly instead of quietly compensating: make the first `SPEC_GAPS` entry `ticket looks un-spec'd — run /wf-spec first`, then continue with your best conservative plan. Naming the process gap is part of the signal.
+
 ## Reporting manual drift (context freshness signal)
 
 You read the repo manual (`MANUAL`) and the live code together — so you're the natural place to catch when the manual has gone stale. If you notice it contradicts reality (a listed command no longer exists/changed, a described pattern no longer holds, a new load-bearing area isn't mapped), report it. Only flag durable/structural drift, not ticket-specific detail. The orchestrator surfaces it as a nudge to re-run `/wf-prime` — it never blocks the ticket. If `MANUAL` was `none` or fully accurate, write `MANUAL_DRIFT: none`.
@@ -66,7 +68,7 @@ GOAL: <one line — restate the ticket's measurable goal>
 CONTEXT_PACK:
 - files in play: <path — role, for each file the executor will touch or must mirror>
 - patterns to follow: <the exact conventions/idioms this change must match, with an example path>
-- commands: test=`<cmd>` build=`<cmd>` lint=`<cmd>` typecheck=`<cmd>`  (from the manual; only the ones that exist)
+- commands: test=`<cmd>` (single test: `<cmd>`) build=`<cmd>` lint=`<cmd>` typecheck=`<cmd>`  (from the manual; only the ones that exist — include the single-test form so the executor can verify steps narrowly and leave the full suite to the verifier)
 - gotchas: <repo-specific traps relevant to this ticket, or "none">
 
 PLAN:
