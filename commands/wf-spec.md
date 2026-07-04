@@ -1,6 +1,6 @@
 ---
 description: Interactively refine one or more Linear tickets into implementation-ready specs — or, for research/spike tickets, record a decision — written back to each ticket's description. Run this BEFORE /wf-run.
-argument-hint: "[--inline|--linear] [ticket-id...]  (no ids + linear mode = resume everything awaiting answers)"
+argument-hint: "[--inline|--linear] [ticket-id...]  (linear mode runs tickets in parallel; no ids + linear = resume everything awaiting answers)"
 allowed-tools: Task, Bash, Read, Edit, AskUserQuestion
 ---
 
@@ -8,7 +8,7 @@ allowed-tools: Task, Bash, Read, Edit, AskUserQuestion
 
 Refine each ticket into a spec that carries enough information for the autonomous /wf-run workflow to go A→Z without further human input. This phase IS interactive — the only question is **where** the clarifying questions get answered (see *Question mode* below).
 
-You are the orchestrator. Do not write specs or touch Linear yourself — delegate. Process tickets **one at a time** (the spec phase is a conversation; don't interleave).
+You are the orchestrator. Do not write specs or touch Linear yourself — delegate. **How many tickets you process at once depends on `MODE`** — see *Processing order* below.
 
 ## Up front (once)
 
@@ -30,6 +30,14 @@ Resolve two things before processing tickets: the **question mode** and the **ti
 - **Ids given** → process exactly those.
 - **No ids** → **sweep mode** (only meaningful under `MODE=linear`): spawn `wf-linear` with intent `LIST_BY_STATUS "Needs Answers"` and process every returned identifier (tickets already parked awaiting answers). If it returns `none`, tell the user nothing is awaiting answers and stop. Under `MODE=inline` there's nothing to resume — tell the user to pass ticket ids and stop.
 
+## Processing order
+
+`MODE` decides concurrency. The ticket steps below are written per-ticket; this governs how they're scheduled across the batch:
+
+- **`MODE=inline` — strictly sequential.** Finish one ticket (steps 1–6) before starting the next. Its clarifying questions are a live terminal conversation; interleaving them would be confusing. (Unchanged behavior.)
+- **`MODE=linear` — parallel by default.** Linear mode never blocks on you until persist, so fan the batch out: run steps **1–4** for **up to 3 tickets concurrently** (same cap as `/wf-run --parallel`). A ticket whose builder returns `NEEDS_INPUT` posts its questions and parks itself (step 4's linear branch) with no interaction — let that finish in place. Set aside every `SPEC`/`DECISION` return and do the **persist confirmations (step 5) one at a time after the fan-out** — that AskUserQuestion is the only serial touchpoint. This is read-only work (no worktrees), so concurrent `wf-spec-builder`/`wf-linear`/`wf-github` spawns don't contend.
+  - **Order by intra-batch dependencies.** If one batch ticket `blocks` / is `blocked-by` another *in the same batch* (e.g. a spike and the ticket it unblocks), run the dependency in an **earlier wave** so its decision/spec is persisted before the dependent's step-3 `RELATED_DECISIONS` pull runs. Independent tickets share the first wave; when the batch has no internal links — the common case — it's a single wave.
+
 ## Per ticket
 
 1. **Fetch.** Spawn `wf-linear` with intent: `FETCH <identifier>`. Capture the returned identifier, title, current state, description, comments, and the `ATTACHMENTS` list. **If the current state is *Needs Answers*, this ticket is a resume** — it was parked earlier with questions posted to Linear. Remember this; step 4 branches on it.
@@ -44,7 +52,7 @@ Resolve two things before processing tickets: the **question mode** and the **ti
 4. **Refine.** Spawn `wf-spec-builder`, passing the full fetched ticket content, the `PR_HISTORY` digest, the `RELATED_TICKETS` digest, the `RELATED_DECISIONS` digest, `MANUAL`, **and** `HANDOFF` (the local path(s), or `none`) — plus, on a resume, an `ANSWERS:` section (see below). It explores the codebase and reads any handoff as **reference-only** visual/behavioral source of truth. **It cannot reach the user** (`AskUserQuestion` doesn't surface inside a subagent), so it returns `STATUS: NEEDS_INPUT` (question blocks: `header` / `question` / `multiSelect` / `options`, recommended option marked), `STATUS: SPEC` (finished implementation spec markdown), or — for a research/spike ticket — `STATUS: DECISION` (the full new description with a `## Decision` section appended). The builder is **mode-agnostic** on questions — it always just returns them; `MODE` only decides what *you* do with them.
 
    **Resume entry — if step 1 flagged this ticket as *Needs Answers*:** before spawning the builder, spawn `wf-linear` with intent `READ_ANSWERS <identifier>`.
-   - `QUESTIONS_STATUS: AWAITING` → the teammate hasn't replied yet. Report "still awaiting answers" and move to the next ticket (leave it parked; don't spawn the builder).
+   - `QUESTIONS_STATUS: AWAITING` → the teammate hasn't replied yet. Report "still awaiting answers" and leave it parked — don't spawn the builder. (In linear-parallel mode this ticket's task is simply done.)
    - `QUESTIONS_STATUS: NO_PENDING` → no question comment found; treat as a fresh spawn (no `ANSWERS`).
    - `QUESTIONS_STATUS: ANSWERED` → build the `ANSWERS:` section from the reply. The `QUESTIONS` body it returns is the exact comment you posted (numbered questions, lettered options, ✅ on the recommended). Map the teammate's free-text reply onto it: `all recommended` → every ✅ option; `1: B` → question 1's option B label; option text or clear paraphrase → that option; genuine free-text that matches no option → pass it verbatim (an "Other" answer). If a question is left unanswered or is truly ambiguous, fall back to its recommended option **and note it in the run summary** so you can flag it to the user. Emit `ANSWERS:` as one line per question: `Qn (<question text>): <chosen option label(s) verbatim>[ — <free-text>]`. Then spawn the builder with the base inputs **plus** this `ANSWERS:` section.
 
@@ -74,9 +82,9 @@ Resolve two things before processing tickets: the **question mode** and the **ti
           Number questions in the builder's order; letter the options in the builder's order; put `✅ recommended` on the option the builder tagged `(recommended)`.
        2. Spawn `wf-linear` `POST_COMMENT <identifier>` with that markdown.
        3. Spawn `wf-linear` `SET_STATUS <identifier> "Needs Answers"`.
-       4. Park this ticket: report `awaiting answers` and move to the next. The teammate answers in Linear; a later `/wf-spec` run (with this id, or no ids to sweep) resumes it via the READ_ANSWERS path above.
+       4. Park this ticket: report `awaiting answers` (under linear-parallel it's just one finished task in the fan-out). The teammate answers in Linear; a later `/wf-spec` run (with this id, or no ids to sweep) resumes it via the READ_ANSWERS path above.
 
-5. **Persist.** Show the user the finished output and confirm with one AskUserQuestion, then act on it. Two flavors:
+5. **Persist.** Show the user the finished output and confirm with one AskUserQuestion, then act on it. (Under `MODE=linear` these confirmations run **serially after** the parallel fan-out — see *Processing order*.) Two flavors:
 
    **Spec (`STATUS: SPEC`)** — confirm "Write this spec to <identifier>'s description?" (Yes / Edit / Skip).
    - **Yes** → spawn `wf-linear` with intent `UPDATE_DESCRIPTION <identifier>` and the spec markdown as the new description. Once it confirms the write, spawn `wf-linear` again with intent `SET_STATUS <identifier> "<READY_STATE>"` to mark the ticket spec-ready for `/wf-run`. If the status transition returns `ERROR` (e.g. the team has no such state), surface it but treat the spec write as the success — don't undo it.
