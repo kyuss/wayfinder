@@ -71,11 +71,12 @@ Surface tickets related to `<identifier>` so the spec phase can learn prior deci
    - if it has a parent → issues with that `parentId` (its sub-issue siblings),
    - issues in the same `project`, and/or with the same `label`.
 
-Merge everything, **drop `<identifier>` itself**, dedupe by identifier, prefer explicit links over grouping siblings, and cap at ~8 most-recently-updated. For each, emit one line with a short single-line summary (truncate long descriptions to ~160 chars). Return:
+Merge everything, **drop `<identifier>` itself**, dedupe by identifier, prefer explicit links over grouping siblings, and cap at ~8 most-recently-updated. For each, emit one line with a short single-line summary (truncate long descriptions to ~160 chars). **Decision tickets:** if a related ticket's description (when available) contains a `## Decision` section, use that section's `**Decision:**` headline as the summary, prefixed with `[DECISION] ` — this flags to the orchestrator that the ticket carries a recorded research decision worth pulling in full. Otherwise summarize the description head as usual. Return:
 ```
 IDENTIFIER: ENG-123
 RELATED:
 ENG-140 | In Review | related | <title> — <≤160-char summary>
+ENG-056 | Done | blocked-by | <title> — [DECISION] <≤160-char decision headline>
 ENG-131 | Done | sibling | <title> — <≤160-char summary>
 ```
 `<relation>` is one of: `parent`, `sub-issue`, `related`, `blocking`, `blocked-by`, `duplicate`, or `sibling` (same project/label). If nothing is related, write `RELATED:` then `none`.

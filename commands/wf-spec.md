@@ -1,5 +1,5 @@
 ---
-description: Interactively refine one or more Linear tickets into implementation-ready specs (writes the spec back to each ticket's description). Run this BEFORE /wf-run.
+description: Interactively refine one or more Linear tickets into implementation-ready specs — or, for research/spike tickets, record a decision — written back to each ticket's description. Run this BEFORE /wf-run.
 argument-hint: "[--inline|--linear] [ticket-id...]  (no ids + linear mode = resume everything awaiting answers)"
 allowed-tools: Task, Bash, Read, Edit, AskUserQuestion
 ---
@@ -39,8 +39,9 @@ Resolve two things before processing tickets: the **question mode** and the **ti
 3. **Gather context (GitHub + related tickets).**
    - Spawn `wf-github`: `PR_HISTORY <keywords from the ticket title/description>` → a digest of how related work was done/merged here. Call the result `PR_HISTORY`.
    - Spawn `wf-linear`: `RELATED <identifier>` → a compact digest of explicitly-linked and sibling tickets (prior decisions, adjacent scope) that PR history won't surface. Call the result `RELATED_TICKETS` (or `none`). This is reference context only — it never blocks; if it errors, carry `RELATED_TICKETS=none` and move on.
+   - **Pull recorded decisions.** Scan `RELATED_TICKETS` for any line marked `[DECISION]` (a linked research/spike ticket that has a recorded decision — usually a `blocking`/`blocked-by` dependency of this ticket). For each such id, spawn `wf-linear` `FETCH <id>` and extract its `## Decision` section from the returned description. Collect these as `RELATED_DECISIONS` (one block per source id: the id + its `## Decision` section), or `none`. These are resolved facts the spec must build on, not re-litigate. Best-effort: if a fetch errors, note it and carry on with the decisions you did get.
 
-4. **Refine.** Spawn `wf-spec-builder`, passing the full fetched ticket content, the `PR_HISTORY` digest, the `RELATED_TICKETS` digest, `MANUAL`, **and** `HANDOFF` (the local path(s), or `none`) — plus, on a resume, an `ANSWERS:` section (see below). It explores the codebase and reads any handoff as **reference-only** visual/behavioral source of truth. **It cannot reach the user** (`AskUserQuestion` doesn't surface inside a subagent), so it returns `STATUS: NEEDS_INPUT` (question blocks: `header` / `question` / `multiSelect` / `options`, recommended option marked) or `STATUS: SPEC` (finished markdown). The builder is **mode-agnostic** — it always just returns questions; `MODE` only decides what *you* do with them.
+4. **Refine.** Spawn `wf-spec-builder`, passing the full fetched ticket content, the `PR_HISTORY` digest, the `RELATED_TICKETS` digest, the `RELATED_DECISIONS` digest, `MANUAL`, **and** `HANDOFF` (the local path(s), or `none`) — plus, on a resume, an `ANSWERS:` section (see below). It explores the codebase and reads any handoff as **reference-only** visual/behavioral source of truth. **It cannot reach the user** (`AskUserQuestion` doesn't surface inside a subagent), so it returns `STATUS: NEEDS_INPUT` (question blocks: `header` / `question` / `multiSelect` / `options`, recommended option marked), `STATUS: SPEC` (finished implementation spec markdown), or — for a research/spike ticket — `STATUS: DECISION` (the full new description with a `## Decision` section appended). The builder is **mode-agnostic** on questions — it always just returns them; `MODE` only decides what *you* do with them.
 
    **Resume entry — if step 1 flagged this ticket as *Needs Answers*:** before spawning the builder, spawn `wf-linear` with intent `READ_ANSWERS <identifier>`.
    - `QUESTIONS_STATUS: AWAITING` → the teammate hasn't replied yet. Report "still awaiting answers" and move to the next ticket (leave it parked; don't spawn the builder).
@@ -48,7 +49,8 @@ Resolve two things before processing tickets: the **question mode** and the **ti
    - `QUESTIONS_STATUS: ANSWERED` → build the `ANSWERS:` section from the reply. The `QUESTIONS` body it returns is the exact comment you posted (numbered questions, lettered options, ✅ on the recommended). Map the teammate's free-text reply onto it: `all recommended` → every ✅ option; `1: B` → question 1's option B label; option text or clear paraphrase → that option; genuine free-text that matches no option → pass it verbatim (an "Other" answer). If a question is left unanswered or is truly ambiguous, fall back to its recommended option **and note it in the run summary** so you can flag it to the user. Emit `ANSWERS:` as one line per question: `Qn (<question text>): <chosen option label(s) verbatim>[ — <free-text>]`. Then spawn the builder with the base inputs **plus** this `ANSWERS:` section.
 
    **Handling the builder's return (both fresh and resume):**
-   - **`STATUS: SPEC`** — strip the status line; go to step 5 (persist). (A clear-enough ticket returns this on the first fresh spawn with no questions — fine, not an error. No comment is posted and the ticket is never parked.)
+   - **`STATUS: SPEC`** — strip the status line; go to step 5 (persist as a spec). (A clear-enough ticket returns this on the first fresh spawn with no questions — fine, not an error. No comment is posted and the ticket is never parked.)
+   - **`STATUS: DECISION`** — a research/spike ticket, resolved. The body is the full new description (original preserved + an appended `## Decision` section). Strip the status line; go to step 5 (persist in **decision mode**).
    - **`STATUS: NEEDS_INPUT`** — a genuine decision is open:
      - **`MODE=inline`** → put the blocks to the user yourself via AskUserQuestion (you're the orchestrator — it works here): map each block to a question, options in the given order with the `(recommended)` one first and labeled "(Recommended)". Re-spawn the builder with the same inputs plus the `ANSWERS:` section. Repeat until it returns a spec (1–2 rounds is normal; after ~3, ask the user whether to push through with defaults).
      - **`MODE=linear`** → **post the questions to Linear and park** — do NOT block or ask in the terminal:
@@ -74,16 +76,23 @@ Resolve two things before processing tickets: the **question mode** and the **ti
        3. Spawn `wf-linear` `SET_STATUS <identifier> "Needs Answers"`.
        4. Park this ticket: report `awaiting answers` and move to the next. The teammate answers in Linear; a later `/wf-spec` run (with this id, or no ids to sweep) resumes it via the READ_ANSWERS path above.
 
-5. **Persist.** Show the user the finished spec and confirm with one AskUserQuestion ("Write this spec to <identifier>'s description?" — Yes / Edit / Skip).
+5. **Persist.** Show the user the finished output and confirm with one AskUserQuestion, then act on it. Two flavors:
+
+   **Spec (`STATUS: SPEC`)** — confirm "Write this spec to <identifier>'s description?" (Yes / Edit / Skip).
    - **Yes** → spawn `wf-linear` with intent `UPDATE_DESCRIPTION <identifier>` and the spec markdown as the new description. Once it confirms the write, spawn `wf-linear` again with intent `SET_STATUS <identifier> "<READY_STATE>"` to mark the ticket spec-ready for `/wf-run`. If the status transition returns `ERROR` (e.g. the team has no such state), surface it but treat the spec write as the success — don't undo it.
    - **Edit** → relay the user's tweaks back to `wf-spec-builder` (re-spawn with the prior spec + requested changes), then re-confirm.
    - **Skip** → leave the ticket unchanged; note it.
 
-6. Status moves to **Ready for Development** only when the spec was written (step 5 → Yes) — this also lifts a resumed ticket out of *Needs Answers*. Tickets **parked** for answers sit in *Needs Answers*; tickets that were skipped — or edited but not yet written — keep their current status; don't transition them.
+   **Decision (`STATUS: DECISION`)** — confirm "Record this decision on <identifier>?" (Yes / Edit / Skip).
+   - **Yes** → spawn `wf-linear` with intent `UPDATE_DESCRIPTION <identifier>` and the returned description (original + `## Decision` section) as the new description. **Do NOT set Ready-for-Development** — a resolved spike has nothing to build; leave its status unchanged. Tell the user the spike is decided and that they close it (Done) in Linear when satisfied. The recorded decision now reaches any dependent ticket via the `RELATED_DECISIONS` pull (step 3) and folds into that ticket's own spec when it's refined.
+   - **Edit** → relay the user's tweaks back to `wf-spec-builder` and re-confirm.
+   - **Skip** → leave the ticket unchanged; note it.
+
+6. Status moves to **Ready for Development** only when a **spec** was written (step 5 spec → Yes) — this also lifts a resumed ticket out of *Needs Answers*. A **decision** written for a research/spike ticket does **not** transition status (the workflow never auto-completes; the human closes the spike). Tickets **parked** for answers sit in *Needs Answers*; tickets that were skipped — or edited but not yet written — keep their current status; don't transition them.
 
 ## After all tickets
 
-Print a compact summary: each identifier → `spec written` / `awaiting answers` / `still awaiting` / `skipped`. If any ticket is `awaiting answers`, remind the user that their teammate answers the question comment in Linear, and that re-running `/wf-spec <id>` — or `/wf-spec` with no ids to sweep every parked ticket — resumes it. For tickets with a spec written, remind them they can now run `/wf-run <ids>`. Also surface any answers you had to default (from an ambiguous/blank reply) so the user can correct them.
+Print a compact summary: each identifier → `spec written` / `decision recorded` / `awaiting answers` / `still awaiting` / `skipped`. For any `decision recorded`, note the spike is resolved and the user closes it in Linear when satisfied. If any ticket is `awaiting answers`, remind the user that their teammate answers the question comment in Linear, and that re-running `/wf-spec <id>` — or `/wf-spec` with no ids to sweep every parked ticket — resumes it. For tickets with a spec written, remind them they can now run `/wf-run <ids>`. Also surface any answers you had to default (from an ambiguous/blank reply) so the user can correct them.
 
 ## Notes
 - If `wf-linear` returns `ERROR`, surface it plainly and ask the user how to proceed — don't guess ticket data.

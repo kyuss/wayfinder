@@ -1,6 +1,6 @@
 ---
 description: Run the ticket-workflow eval harness — stage evals (spec-builder, planner, executor) over seed cases, judged by wf-judge, with regression comparison against the saved baseline. Run after changing any agent prompt, model, or the flow.
-argument-hint: [case-id ...] [--stage spec|plan|execute]
+argument-hint: [case-id ...] [--stage spec|decision|plan|execute]
 allowed-tools: Task, Bash, Read, Write
 ---
 
@@ -18,7 +18,7 @@ It is fully offline: it touches only the local fixtures in `~/.claude/ticket-wor
 - `EVAL/cases` and `EVAL/fixtures` exist; `~/.claude/bin/wf-exec` is executable. If missing, tell the user to set up the harness.
 
 ## Per case
-Parse the case file: `id`, `fixture` (relative to `EVAL`), `stages`, the `## TICKET` block, and the `## RUBRIC:spec` / `## RUBRIC:plan` / `## RUBRIC:execute` blocks.
+Parse the case file: `id`, `fixture` (relative to `EVAL`), `stages`, the `## TICKET` block, and the `## RUBRIC:spec` / `## RUBRIC:decision` / `## RUBRIC:plan` / `## RUBRIC:execute` blocks.
 
 **Reset the fixture to a clean baseline first** (and again after each stage that mutates it):
 `git -C "<fixture>" checkout -- . ; git -C "<fixture>" clean -fd ; git -C "<fixture>" checkout main 2>/dev/null` (delete any throwaway eval branch).
@@ -26,6 +26,11 @@ Parse the case file: `id`, `fixture` (relative to `EVAL`), `stages`, the `## TIC
 ### Stage: spec (read-only — does not mutate the fixture)
 1. Spawn `wf-spec-builder` with: the case TICKET as the raw/thin ticket, the fixture path as the codebase to explore, `MANUAL=none`, `PR_HISTORY=none`, `HANDOFF=none`, and this flag: **"EVAL MODE — non-interactive: do NOT return `STATUS: NEEDS_INPUT`; resolve every decision conservatively from the code, record each as a fact, and produce your best `STATUS: SPEC`."** Capture its full output as `ARTIFACT`.
 2. Spawn `wf-judge` with `STAGE=spec`, the case (TICKET + `RUBRIC:spec`), and `ARTIFACT`. Record its verdict. (No branch or reset needed — the spec stage only reads the fixture.)
+
+### Stage: decision (read-only — does not mutate the fixture)
+For research/spike cases, where the deliverable is a recorded decision, not code.
+1. Spawn `wf-spec-builder` with: the case TICKET as the raw/thin ticket, the fixture path as the codebase to explore, `MANUAL=none`, `PR_HISTORY=none`, `RELATED_TICKETS=none`, `RELATED_DECISIONS=none`, `HANDOFF=none`, and this flag: **"EVAL MODE — non-interactive: this is a research/spike ticket. Do NOT return `STATUS: NEEDS_INPUT`; resolve the decision conservatively from the code, commit to one option, and produce your best `STATUS: DECISION` (original description preserved + an appended `## Decision` section)."** Capture its full output as `ARTIFACT`.
+2. Spawn `wf-judge` with `STAGE=decision`, the case (TICKET + `RUBRIC:decision`), and `ARTIFACT`. Record its verdict. (No branch or reset needed — the decision stage only reads the fixture.)
 
 ### Stage: plan
 1. Spawn `wf-planner` with: the case TICKET as the enriched ticket, the fixture path as the worktree, `MANUAL=none`, `PR_HISTORY=none`, and this flag: **"EVAL MODE — non-interactive: do NOT call AskUserQuestion; if you would ask the user, instead state it in `SPEC_GAPS` and proceed conservatively."** Capture its full output as `ARTIFACT`.
