@@ -62,8 +62,16 @@ Use exactly this skeleton. Keep the whole file roughly **100–180 lines**. Ever
 - In Progress → <state or (auto)>
 - In Review → <state or (auto)>
 - On merge, set → <QA/verify state, or `In Review` if no QA state exists>
+
+## Workflow preferences
+<!-- Per-repo behavior knobs the ticket agents read. Delete a line to fall back to its default. -->
+- spec-questions: inline   <!-- inline = /wf-spec asks clarifying questions in the terminal (solo dev);
+                                 linear = post them as a Linear comment and park the ticket in Needs Answers
+                                 for a teammate to answer async. Default: inline. Override per-run with --inline/--linear. -->
 ```
 
 **Linear workflow section:** if you were given a `LINEAR_STATES` block (the team's live states + types), map each canonical stage to the best-matching state **by name, then type** and fill the right-hand side in; if a stage has no reasonable match, write `(auto)` with a `<!-- no match — set manually -->` note, and set `On merge, set →` to the first `started`-type state named like QA/Test/Verify, else `In Review`. If you were **not** given `LINEAR_STATES`, write `(auto)` for the three stages and default `On merge, set →` to `QA` (leave the comment telling the user to adjust). Never put a `completed`-type state on the `On merge` line.
+
+**Workflow preferences section:** emit it verbatim as shown (a static stub defaulting `spec-questions: inline`). Don't infer or change the value — it's a knob the user edits by hand; you're just scaffolding it so it's discoverable.
 
 Return a one-line confirmation (`CONTEXT.md written: <path>, <N> lines`) — not the file body.
