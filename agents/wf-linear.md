@@ -63,6 +63,25 @@ COMMENTS:
 `<name> | <mimetype> | <size-bytes> | <href>`
 using the embed's `name`, `mimetype`, `size`, and `href` fields verbatim (the `href` is a freshly-signed `uploads.linear.app` URL). If there are none, write `none`. Do NOT download anything — you have no network tools; you only surface the hrefs. **The signed href expires ~5 minutes after this fetch**, so flag in your reply that the caller must download promptly. (External link attachments like Notion — the issue's `attachments` array — are not file embeds; ignore them here.)
 
+### RELATED `<identifier>`
+Surface tickets related to `<identifier>` so the spec phase can learn prior decisions and adjacent scope that PR/code history won't show. **Read-only** — fetch and report, change nothing. Gather from two sources and merge:
+
+1. **Explicit links** — get the issue with relations included (`includeRelations: true` on the get-issue tool, if the backend supports it). Capture its `related` / `blocking` / `blocked-by` / `duplicate` relations, and note its `parent`, `project`, and `labels`.
+2. **Siblings by grouping** — list issues sharing the ticket's grouping, most-recently-updated first, small limits (only the filters that apply):
+   - if it has a parent → issues with that `parentId` (its sub-issue siblings),
+   - issues in the same `project`, and/or with the same `label`.
+
+Merge everything, **drop `<identifier>` itself**, dedupe by identifier, prefer explicit links over grouping siblings, and cap at ~8 most-recently-updated. For each, emit one line with a short single-line summary (truncate long descriptions to ~160 chars). Return:
+```
+IDENTIFIER: ENG-123
+RELATED:
+ENG-140 | In Review | related | <title> — <≤160-char summary>
+ENG-131 | Done | sibling | <title> — <≤160-char summary>
+```
+`<relation>` is one of: `parent`, `sub-issue`, `related`, `blocking`, `blocked-by`, `duplicate`, or `sibling` (same project/label). If nothing is related, write `RELATED:` then `none`.
+
+**Backend capability / failure:** if the connected backend can't include relations or filter issues (e.g. the claude.ai connector lacks the capability), report whatever subset you could get, or `RELATED: none`. Never fabricate a link or a summary — same rule as everywhere: a real tool result, or `none`/`ERROR`, never memory.
+
 ### SET_STATUS `<identifier>` `<stage>`
 `<stage>` is either a **canonical stage** (match via the synonym table + type fallback) or the **team's exact state name** (when the orchestrator already resolved it from the repo's `## Linear workflow` config). List the team's states, match, transition the issue. Return:
 ```
