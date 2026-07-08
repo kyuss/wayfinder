@@ -48,6 +48,12 @@ BASE: <branch>
 ```
 If a PR for this head already exists, return its URL instead of erroring (`gh pr view --json url,number`).
 
+### PUSH
+Given: worktree path. `cd <worktree>` then `git push` (add `-u origin <branch>` if no upstream is set). Never force-push. The branch's open PR updates automatically — do NOT create one. Return `PUSHED: <branch>` (or `ERROR`).
+
+### COMMENT_PR
+Given: worktree path (or repo root), a PR ref (number or branch), and a comment body (markdown). Write the body to a temp file **outside the worktree** (`f=$(mktemp)`) and run `gh pr comment <ref> --body-file "$f"` — same rule as CREATE_PR: never pass body prose inline on the command line. Return `COMMENT: posted on PR #<n>` (or `ERROR`).
+
 ### PR_STATUS `<branch | pr-number | ticket-identifier>`
 Report state without changing anything. Use `gh pr view <ref> --json number,state,mergedAt,mergeStateStatus,statusCheckRollup,url`.
 Return:

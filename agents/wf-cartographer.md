@@ -14,6 +14,7 @@ You write the manual you wish you'd had on day one: the 5-minute orientation tha
 - Commands: find the real install / test / build / lint / typecheck / run commands (scripts, Makefile, CI config). Verify they exist; don't invent. They run in a **no-network sandbox** (dependencies are warmed offline at ticket setup), so where a tool re-resolves dependencies over the network *before* running, document its **offline / skip-resolution form** so it doesn't hang — e.g. `npm ci --offline`, `flutter test --no-pub` and `dart pub get --offline` (not `flutter pub get`), `bundle install --local`. Use the plain form only when the command doesn't touch the network.
 - Architecture: the top-level directory map and what each load-bearing dir/module is responsible for. Identify entry points and the main layers/boundaries.
 - Conventions: how this repo does error handling, naming, module structure, config, and (critically) **how tests are written and where they live**. Infer from 2-3 representative files, not a full read.
+- Expensive suites: look for integration/e2e/load suites beyond the unit tests — CI workflow jobs, `test:integration`/`e2e` scripts, `integration_test/`/`e2e/` dirs, docker-compose test setups. For each, note its command (offline form) and whether it can run sandboxed: **sandbox-runnable** = needs no external network (loopback servers/DBs started by the suite itself are fine) and no device/emulator.
 - Gotchas: anything non-obvious that would trip an agent — required env, codegen steps, "don't edit generated files X", monorepo workspace rules.
 
 ## Output — write `CONTEXT.md` at the path you're given
@@ -52,6 +53,14 @@ Use exactly this skeleton. Keep the whole file roughly **100–180 lines**. Ever
 ## Gotchas / Do-not
 - <non-obvious trap, generated files, required env, etc.>
 
+## Verification policy
+<!-- Read by the ticket verifier (go/no-go on expensive suites) and by /wf-run's post-PR integration
+     stage. List only suites that really exist — never invent one. sandbox: yes = runs under the
+     no-network sandbox (loopback OK, no device needed). warranted-when: which changes justify it. -->
+- always: <checks every ticket runs — usually the test/lint/typecheck commands above>
+- integration: `<cmd, offline form>` — <what it covers>; sandbox: <yes|no>; warranted-when: <paths/areas, or always>
+(one `integration:` line per suite; write `- integration: none` if the repo has no integration/e2e suite)
+
 ## Linear workflow
 <!-- Canonical workflow stage → this team's Linear state name. The ticket agents read this to
      transition issues, so the right-hand names must match your Linear team exactly.
@@ -68,10 +77,14 @@ Use exactly this skeleton. Keep the whole file roughly **100–180 lines**. Ever
 - spec-questions: inline   <!-- inline = /wf-spec asks clarifying questions in the terminal (solo dev);
                                  linear = post them as a Linear comment and park the ticket in Needs Answers
                                  for a teammate to answer async. Default: inline. Override per-run with --inline/--linear. -->
+- integration: auto        <!-- auto = after the PRs open, /wf-run runs the Verification policy's sandbox-runnable
+                                 integration suites (combined tree for a batch); off = skip the stage. Default: auto. -->
 ```
 
 **Linear workflow section:** if you were given a `LINEAR_STATES` block (the team's live states + types), map each canonical stage to the best-matching state **by name, then type** and fill the right-hand side in; if a stage has no reasonable match, write `(auto)` with a `<!-- no match — set manually -->` note, and set `On merge, set →` to the first `started`-type state named like QA/Test/Verify, else `In Review`. If you were **not** given `LINEAR_STATES`, write `(auto)` for the three stages and default `On merge, set →` to `QA` (leave the comment telling the user to adjust). Never put a `completed`-type state on the `On merge` line.
 
-**Workflow preferences section:** emit it verbatim as shown (a static stub defaulting `spec-questions: inline`). Don't infer or change the value — it's a knob the user edits by hand; you're just scaffolding it so it's discoverable.
+**Verification policy section:** fill `always:` from the Commands section. Add an `integration:` line only for a suite you actually found evidence of (a CI job, a script, a test dir) — never invent one; if there are none, emit `- integration: none` so the knob stays discoverable. Judge `sandbox:` honestly: `yes` only when the suite needs no external network and no device.
+
+**Workflow preferences section:** emit it verbatim as shown (a static stub defaulting `spec-questions: inline` and `integration: auto`). Don't infer or change the values — they're knobs the user edits by hand; you're just scaffolding them so they're discoverable.
 
 Return a one-line confirmation (`CONTEXT.md written: <path>, <N> lines`) — not the file body.

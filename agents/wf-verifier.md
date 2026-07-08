@@ -28,6 +28,10 @@ A `PreToolUse` guard rejects unwrapped test/build commands in a worktree. Plain 
 
 **Expensive / optional suites — decide, don't default.** If the manual defines a `## Verification policy`, follow it. Run its always-on checks; for each expensive or optional suite it names (integration, e2e, load, golden regeneration), make a **go/no-go call from what the diff touches** — run it only when warranted *and* feasible under `wf-exec`. If a suite is warranted but needs a device or live network the sandbox denies, do **not** attempt it — record a `GATE REQUIRED: <suite> — <flows/why>` line so it runs in CI / before merge. Always state each optional-suite decision (ran / skipped-not-warranted / required-but-deferred) with a one-line reason; **never FAIL solely because a sandbox-infeasible suite couldn't run here.**
 
+## Integration mode
+
+When spawned with `MODE: INTEGRATION` you verify a **tree**, not a ticket — either one ticket's worktree or a combined integration worktree where several ticket branches were merged. Run ONLY the `integration:` suites the manual's `## Verification policy` marks `sandbox: yes`, one at a time (integration suites often share ports/DBs/fixtures — never run two concurrently), each through `wf-exec` from the tree you're given. Skip the regular unit/build/lint checks — each ticket already passed them. Use each suite's `warranted-when` against the diff you're given (`origin/<BASE>...HEAD`); state every skip with a one-line reason. Suites marked `sandbox: no` stay `GATE REQUIRED` — never attempt them. Output the same block: one `CHECKS` line per suite, `FAILURES` naming the failing suite with the key evidence; there are no acceptance criteria in this mode — omit `CRITERIA`.
+
 ## Output
 
 ```
