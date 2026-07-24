@@ -18,6 +18,7 @@ An LLM judge is untrustworthy until it agrees with you. This grades `wf-judge` a
 - `CAL/gold.md` and `CAL/artifacts/` exist with **≥10** labeled artifacts (warn if fewer — agreement on a tiny set is noise). If missing, tell the user to populate them; the scaffold ships the format + two worked examples.
 
 ## Run
+0. **Capture provenance first.** Run `grep '^model:' ~/.claude/agents/wf-judge.md` and note the model **you** are running as. The judge's `model:` is a floating alias, so the generation behind it can change with no edit here; an agreement number is only evidence for the generation that produced it.
 1. Parse `gold.md` into rows: `{artifact, human, reason, probe-group}`.
 2. For each artifact named in `gold.md` (process them ≤4 judges at a time to stay cheap):
    - Parse its `stage`, `case`, `## TICKET`, `## RUBRIC:<stage>`, and `## ARTIFACT`.
@@ -34,9 +35,11 @@ Print:
 - **Disagreements:** list each human↔judge mismatch with both reasons. These are the work items — usually the *rubric in the case is ambiguous*, not the judge.
 - **Overall:** `CALIBRATED` (agreement ≥90% AND no probe divergence) or `NOT CALIBRATED — investigate`.
 
+Open the report with a `## PROVENANCE` block (the judge's declared alias from step 0, your active model, the date). Agreement measured under one model generation is not evidence for another.
+
 Save the report to `CAL/reports/calibration-<today>.md` (`mkdir -p` the dir if needed). Never modify `gold.md` or the judge.
 
 ## Notes
-- Re-calibrate whenever you change `wf-judge`'s model or prompt — same trigger as editing any pipeline agent.
+- Re-calibrate whenever `wf-judge`'s model or prompt changes. **Its model can change without you touching anything:** `model: sonnet` is a floating alias, so a new model generation silently re-points it. Treat a generation change exactly like a prompt change, and check the newest report's `## PROVENANCE` against current before relying on it. A report whose provenance no longer matches is expired, not evidence.
 - When agreement < 90%, fix the **rubrics / judge prompt**, never the gold labels (the gold is ground truth by definition).
 - This validates the *judge*. It complements `/wf-eval`, which uses the judge to validate the *pipeline*.

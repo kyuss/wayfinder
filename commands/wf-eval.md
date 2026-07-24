@@ -17,6 +17,18 @@ It is fully offline: it touches only the local fixtures in `~/.claude/ticket-wor
 ## Preconditions
 - `EVAL/cases` and `EVAL/fixtures` exist; `~/.claude/bin/wf-exec` is executable. If missing, tell the user to set up the harness.
 
+## Model provenance (capture this before you spawn anything)
+
+Every agent declares a **floating alias** (`model: opus|sonnet|haiku`). What those resolve to changes when a new model generation ships, with **no edit to this repo and no signal to you**. Scores produced under one generation are not comparable to scores produced under another, so a run record without provenance cannot support a regression verdict at all.
+
+Capture what is actually in play, before judging anything:
+
+```
+grep -H '^model:' ~/.claude/agents/wf-{spec-builder,planner,executor,reviewer,verifier,judge}.md
+```
+
+Record that output verbatim as a `## PROVENANCE` block at the top of the run record, plus `active-model:` (the model **you**, the orchestrator, are running as, since that is what the aliases resolve against) and `date:`. Both halves are required: an alias on its own does not identify a generation.
+
 ## Per case
 Parse the case file: `id`, `fixture` (relative to `EVAL`), `stages`, the `## TICKET` block, the `## RUBRIC:spec` / `## RUBRIC:decision` / `## RUBRIC:plan` / `## RUBRIC:execute` / `## RUBRIC:review` blocks, and (review cases only) the `## MUTATION` block.
 
@@ -54,7 +66,8 @@ Exercises `wf-reviewer` against a planted-flaw diff — the case ships a `## MUT
 ## Report + regression gate
 - Print a table: `case | stage | PASS/FAIL | score | biggest weakness`.
 - Compute the mean score and pass-rate.
-- **Compare to baseline:** if `EVAL/baselines/baseline.md` exists, diff each case/stage verdict against it and flag any **regression** (was PASS now FAIL, or score dropped > 0.15). If there are regressions, say so loudly — that's the signal a recent agent/model/flow change degraded the pipeline.
+- **Provenance gate (settle this before making any regression claim).** Compare this run's `## PROVENANCE` block against the baseline's. If they differ, or the baseline has none, a score difference **cannot** be attributed to your prompt/flow change: print `INCOMPARABLE: provenance <differs|missing>`, report the raw scores with **no** regression verdicts, and tell the user to re-baseline under current provenance before trusting the gate again. Say this as loudly as you would a regression; a silently mis-attributed regression is worse than a missing one, because it sends you editing prompts that were never the problem.
+- **Compare to baseline** (only once provenance matches): diff each case/stage verdict against it and flag any **regression** (was PASS now FAIL, or score dropped > 0.15). If there are regressions, say so loudly — that's the signal a recent agent/model/flow change degraded the pipeline.
 - Save this run to `EVAL/baselines/run-<today>.md` — but **never overwrite an existing run record**: if that file already exists (a same-day rerun), save to `run-<today>-<HHMMSS>.md` instead (e.g. `date +%Y-%m-%d-%H%M%S`) so each run is preserved as immutable history. Then offer to promote it to `baseline.md` (only do so on explicit user confirmation — never overwrite the baseline silently). `baseline.md` is the moving gold pointer the gate diffs against; the dated `run-*.md` files are the permanent per-run archive and are never pruned.
 
 ## Notes
