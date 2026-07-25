@@ -44,7 +44,7 @@ For a token-cheap orientation before diving into the files below, read `./CONTEX
 
 ## The agents (`~/.claude/agents/`)
 
-**Reasoning agents** — `wf-spec-builder` (opus, interactive: ticket → implementation-ready spec), `wf-planner` (opus: spec → surgical plan + forward Context Pack), `wf-executor` (sonnet: implements plan, atomic commits), `wf-reviewer` (opus: reviews diff, high bar for blocking), `wf-verifier` (sonnet: runs tests/build/lint, proves acceptance criteria), `wf-cartographer` (sonnet: one-time, writes a repo's `CONTEXT.md` manual).
+**Reasoning agents** — `wf-spec-builder` (opus, interactive: ticket → implementation-ready spec), `wf-planner` (opus: spec → surgical plan + forward Context Pack), `wf-executor` (sonnet: implements plan, atomic commits), `wf-reviewer` (opus: reviews diff coverage-first — reports every finding with a confidence tag; only precisely-routed BLOCKING items drive the fix loop), `wf-verifier` (sonnet: runs tests/build/lint, proves acceptance criteria), `wf-cartographer` (sonnet: one-time, writes a repo's `CONTEXT.md` manual).
 
 **Boundary agents** — each owns *all* I/O to one external system so other agents stay free of API plumbing: `wf-linear` (haiku, all Linear MCP calls), `wf-github` (haiku, all `gh` CLI calls).
 
