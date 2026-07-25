@@ -3,8 +3,9 @@
 #
 # Copies the wf-* agents, commands, bin scripts, and hooks into your Claude Code
 # config dir, generates the sandbox profile for your machine, and sets up the eval
-# fixtures. It does NOT touch your settings.json — hook wiring is a manual step it
-# prints at the end (so it can never clobber your existing config).
+# fixtures. It does NOT touch your settings.json — hook wiring stays a manual step
+# (so it can never clobber your existing config), but the installer now DETECTS
+# whether the two guard hooks are wired and warns loudly until they are.
 #
 # Re-runnable: it overwrites only wf-* files it owns and leaves everything else alone.
 # Usage: ./install.sh
@@ -15,6 +16,7 @@ CLAUDE="${CLAUDE_HOME:-$HOME/.claude}"
 
 say()  { printf '\033[1m%s\033[0m\n' "$*"; }
 warn() { printf '\033[33m! %s\033[0m\n' "$*"; }
+err()  { printf '\033[1;31m!! %s\033[0m\n' "$*"; }
 
 say "Installing Wayfinder into $CLAUDE"
 
@@ -58,15 +60,37 @@ bash "$CLAUDE/ticket-workflow-evals/setup-fixtures.sh"
 
 say "Files installed."
 echo
-say "ONE MANUAL STEP — wire up the hooks:"
-cat <<EOF
+
+# --- hook wiring check (detect-and-warn; never touches settings.json) ----------
+# The guards are the workflow's enforcement layer: the PreToolUse hook blocks
+# unsandboxed project commands in worktrees, the SubagentStop hook blocks
+# boundary agents that answer without making a tool call. The workflow RUNS
+# without them (agents follow their prompts voluntarily), so a skipped wiring
+# step fails silently — this check makes that state loud on every install run.
+SETTINGS="$CLAUDE/settings.json"
+hooks_wired=false
+if command -v jq >/dev/null 2>&1 && [ -f "$SETTINGS" ] && jq -e . "$SETTINGS" >/dev/null 2>&1; then
+  if jq -e '.hooks.PreToolUse[]?.hooks[]?.command | select(contains("wf-sandbox-guard.sh"))' "$SETTINGS" >/dev/null 2>&1 \
+  && jq -e '.hooks.SubagentStop[]?.hooks[]?.command | select(contains("wf-boundary-toolcall-guard.sh"))' "$SETTINGS" >/dev/null 2>&1; then
+    hooks_wired=true
+  fi
+fi
+
+if [ "$hooks_wired" = true ]; then
+  say "Guard hooks: wired in $SETTINGS — sandbox + boundary enforcement active."
+else
+  err "GUARD HOOKS NOT WIRED — the workflow's security model is NOT enforced."
+  err "Nothing currently blocks unsandboxed project commands in worktrees, or a"
+  err "boundary agent fabricating an answer without a real API call. Fix it now:"
+  cat <<EOF
   Merge the two entries in:
       $REPO/settings.hooks.json
-  into the "hooks" object of your ~/.claude/settings.json.
+  into the "hooks" object of:
+      $SETTINGS
   (If you have no "hooks" key yet, you can paste the whole "hooks": { ... } block.)
-  These enforce the sandbox and the boundary-agent guard — the workflow's security
-  model depends on them.
+  Then re-run ./install.sh — this warning repeats until both hooks are detected.
 EOF
+fi
 echo
 say "Then, in Claude Code:"
 echo "  - Connect the Linear MCP:  /mcp"
