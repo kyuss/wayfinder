@@ -56,7 +56,7 @@ Other load-bearing paths:
 - Model tiering is explicit and load-bearing — preserve it when touching an agent's model: Opus for judgment/architecture, Sonnet for execution/verification/grading, Haiku for high-volume structured API calls (see per-agent tiers above).
 - Single-owner boundary pattern: only `wf-linear` calls Linear MCP tools, only `wf-github` calls `gh`; every other agent consumes their pre-fetched output, never the APIs directly.
 - Bash scripts (`bin/`, `hooks/`) favor `set -euo pipefail`, dense inline "why" comments (these scripts *are* the security model, not incidental tooling), and denylist-by-pattern (not allowlist) for stripping secret-shaped env vars.
-- Downstream workflow conventions these files encode (mirror if adding a command): branch `ticket-id/slug`; worktrees at `ROOT/.worktrees/<id>` (kept on failure, removed on merge); no `.planning/`-style scratch files (spec/plan persist to the Linear ticket description); executor commits carry a `Co-Authored-By: Claude <noreply@anthropic.com>` trailer.
+- Downstream workflow conventions these files encode (mirror if adding a command): branch `ticket-id/slug`; worktrees at `ROOT/.worktrees/<id>` (kept on failure, removed on merge); no `.planning/`-style scratch files (the spec persists to a marked Linear ticket comment, the plan stays in-memory, the description holds a short brief); executor commits carry a `Co-Authored-By: Claude <noreply@anthropic.com>` trailer.
 
 ## Testing
 - Framework: `wf-judge` (LLM-as-judge, Sonnet) scores an agent's output against a per-case rubric (binary pass/fail + 0–1 per dimension) — no traditional unit-test suite exists for this repo's own bash/markdown.

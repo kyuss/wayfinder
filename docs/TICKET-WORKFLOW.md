@@ -61,7 +61,7 @@ Each agent leads with concrete *operating standards* (how a senior in that role 
 ## Commands (5)
 
 - **`/wf-prime`** — run once per repo. `wf-cartographer` writes a compact `CONTEXT.md` operating manual (~100–180 dense lines: stack, architecture map, conventions, exact build/test/lint commands, gotchas). Recommended to commit it. Optional, but the highest leverage-per-token move in the system.
-- **`/wf-spec <ids>`** — interactive, run first. Refines each ticket *one at a time* in conversation with you and writes the spec into its Linear **description**. The ticket stays in *To Do*.
+- **`/wf-spec <ids>`** — interactive, run first. Refines each ticket *one at a time* in conversation with you and posts the spec as a marked comment on its Linear ticket, rewriting the description to a short Why/What/Success-criteria brief. The ticket stays in *To Do*.
 - **`/wf-run <ids> [--parallel]`** — autonomous A→Z. Each ticket runs in its own git worktree, from *In Progress* to an open PR (*In Review*). Default is **sequential** (one ticket at a time); `--parallel` runs file-disjoint tickets **concurrently** (≤3 at once) via `wf-runner`. Never merges.
 - **`/wf-eval [case ...]`** — the regression gate. Runs stage evals (planner, executor) over seed cases against local fixtures, judged by `wf-judge`, and compares to the saved baseline. Fully offline — never touches Linear/GitHub.
 - **`/wf-calibrate`** — validates the *judge* itself. Grades `wf-judge` against a human-labeled gold set (agreement, FAIL-class precision/recall, bias probes) so the `/wf-eval` gate can be trusted. Fully offline; re-run after changing the judge's model or prompt.
@@ -80,7 +80,7 @@ Each command is also available as a `Skill` of the same name.
                                        ▼
 /wf-spec ─▶ wf-linear FETCH ─▶ wf-github PR_HISTORY ─▶ wf-spec-builder ⇄ YOU
  (interactive)                                                        │
-                                       wf-linear UPDATE_DESCRIPTION ◀┘  (spec → ticket description)
+                                       wf-linear POST_COMMENT + UPDATE_DESCRIPTION ◀┘  (spec → ticket comment, brief → description)
 
 /wf-run — PREFLIGHT first (fail-fast, before touching any ticket):
   git repo? · gh authed? · origin remote? · Linear reachable? · sandbox present & executable?
@@ -156,7 +156,7 @@ The non-obvious operational guarantees inside `/wf-run`:
 - **Preflight is fail-fast.** Before *any* ticket is touched, the orchestrator validates: it's a git repo, `gh` is installed + authed, a GitHub `origin` remote exists, Linear is reachable (a cheap `FETCH` of the first ticket), the sandbox wrapper is present and executable, the repo root and base branch resolve, and `.worktrees/` is excluded locally (via `.git/info/exclude`, *not* `.gitignore` — it never pollutes committed files). The **MANUAL** (first existing of `CONTEXT.md` / `CLAUDE.md` / `AGENTS.md`) is resolved once and reused for every ticket in the run. Any preflight failure stops the whole run.
 - **Status timing is honest.** A ticket is set *In Progress* **only after** its worktree is successfully created — so a setup failure never leaves a ticket falsely marked In Progress.
 - **Resumable.** If the branch/worktree for a ticket already exists, it's **reused** rather than recreated — a failed run can be re-invoked and pick up where it left off.
-- **Acceptance criteria drive verification.** The orchestrator extracts the `## Acceptance criteria` section from the ticket description and passes it to the reviewer and verifier; they check observed behavior against each criterion, not merely that code exists.
+- **Acceptance criteria drive verification.** The orchestrator extracts the `## Acceptance criteria` section from the resolved spec (the marked Linear comment, falling back to the description on tickets spec'd before this existed) and passes it to the reviewer and verifier; they check observed behavior against each criterion, not merely that code exists.
 - **Bounded loops.** Review and verify are each capped at **≤2 rounds**. If still blocking/failing after two, the remaining items are surfaced to you rather than looping forever.
 - **Empty-PR guard.** Before opening a PR the orchestrator confirms the branch has commits beyond base. Zero commits → **no PR**; the ticket is left *In Progress* and reported for investigation.
 - **Isolated, no stacking.** Each ticket is fully isolated in its own worktree — sequentially one at a time by default, or concurrently under `--parallel` (≤3, file-disjoint). Either way a ticket **cannot** build on another ticket's unmerged work (no PR stacking) — they're independent.
@@ -224,7 +224,7 @@ Cost-aware: each case spawns 1–2 agents + a judge — iterate on one case id w
 - **Never merges, waits for checks, or sets Linear "Done" autonomously.** Done + worktree cleanup require your explicit "PR X is merged" go-ahead (and `wf-github` confirms MERGED before any cleanup).
 - **Branch naming:** `ticket-id/slug` (e.g. `ENG-123/add-oauth-login`); slug is the kebab-cased ticket title.
 - **Worktrees:** live in `ROOT/.worktrees/<identifier>`. Kept on failure for inspection; removed on merge. Excluded locally via `.git/info/exclude`.
-- **Spec persistence:** the refined spec is written to the Linear ticket **description** (no `.planning/` files anywhere).
+- **Spec persistence:** the refined spec is posted as a marked Linear ticket **comment** (latest wins); the description holds a short Why/What/Success-criteria brief (no `.planning/` files anywhere).
 - **PR descriptions:** concise, high-fidelity (What / Why / Changes / Verification + Linear ref). No filler.
 - **Sandboxed execution:** all project code runs via `wf-exec` (no external egress, no credential reads); the `PreToolUse` guard enforces it.
 - **Commit attribution:** executor commits carry `Co-Authored-By: Claude <noreply@anthropic.com>`.

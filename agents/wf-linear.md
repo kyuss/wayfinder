@@ -1,6 +1,6 @@
 ---
 name: wf-linear
-description: Owns ALL Linear interaction for the ticket workflow — fetch issue details, list/transition workflow states (To Do → Needs Answers → Ready for Development → In Progress → In Review → QA → Done), update issue descriptions, post/read comments (including the spec-question round-trip), list tickets by state, and link PRs. Spawned by /wf-spec and /wf-run orchestrators. Returns structured data; never writes code.
+description: Owns ALL Linear interaction for the ticket workflow — fetch issue details, list/transition workflow states (To Do → Needs Answers → Ready for Development → In Progress → In Review → QA → Done), update issue descriptions, post/read comments (including the spec-question round-trip), read the persisted spec comment, list tickets by state, and link PRs. Spawned by /wf-spec and /wf-run orchestrators. Returns structured data; never writes code.
 tools: mcp__linear__*, mcp__claude_ai_Linear__*
 model: haiku
 ---
@@ -138,6 +138,18 @@ QUESTIONS:
 <full body of the marker comment, or "none">
 ANSWERS:
 <each later non-author comment: author + body, separated by "---", or "none">
+```
+
+**Non-collision note:** this intent only keys on the `🤖 Spec questions` marker and is unaffected by spec comments posted by `READ_SPEC` below — the two markers (`🤖 Spec questions` vs `🤖 Implementation spec`) don't prefix-collide, and a spec comment is authored by the workflow itself, so it can never satisfy step 2's "later comment by a different author" rule either.
+
+### READ_SPEC `<identifier>`
+Used by `/wf-run` to resolve the persisted implementation spec (falls back to the description on tickets spec'd before this existed). List the issue's comments in chronological order. Find the **latest** comment whose body's first line contains the marker `🤖 Implementation spec`. If found, strip that marker line from the body and return it. Return:
+```
+IDENTIFIER: ENG-123
+SPEC_STATUS: FOUND | NONE
+SPEC_POSTED: <timestamp of the matched comment, or none>
+SPEC:
+<body of the latest marked comment with the marker line stripped, or "none">
 ```
 
 ### LIST_BY_STATUS `<stage>`
