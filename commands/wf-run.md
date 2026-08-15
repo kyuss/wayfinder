@@ -91,7 +91,7 @@ Spawn `wf-linear FETCH <id>` **and** `wf-linear READ_SPEC <id>` for every ticket
 For each ticket, create/reuse its worktree+branch exactly as in sequential step 2, then set it In Progress. Do these one at a time — `git worktree add` is fast and serializing avoids any index race.
 
 ### P3. Plan all (parallel) — also the overlap signal
-For each ticket, spawn `wf-github PR_HISTORY` + `wf-planner` (pass the planner that ticket's `HANDOFF`). Planning is read-only, so running all planners at once is safe — and a blocked planner simply returns `STATUS: NEEDS_INPUT` and stops without wasting an execute pass (you can't answer it mid-batch in parallel mode). Route on the returned status:
+For each ticket, spawn `wf-github PR_HISTORY` + `wf-planner` (pass the planner that ticket's **resolved `SPEC`** from P1 — not the raw description — and its `HANDOFF`). Planning is read-only, so running all planners at once is safe — and a blocked planner simply returns `STATUS: NEEDS_INPUT` and stops without wasting an execute pass (you can't answer it mid-batch in parallel mode). Route on the returned status:
 - **`STATUS: NEEDS_INPUT`** → mark that ticket `NEEDS_HUMAN`, **carry its question blocks** with it, and exclude it from parallel execute. You'll put the questions to the user and re-plan in P8.
 - **`STATUS: PLAN`** → collect its `GOAL`, `CONTEXT_PACK`, `PLAN`, and `files in play`. Apply the same `SPEC_GAPS` → `wf-spec-gaps.md` self-improvement append and `MANUAL_DRIFT` collection as sequential step 3.
 
