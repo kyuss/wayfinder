@@ -117,7 +117,7 @@
   <h2>The shape of a run</h2>
   <ol class="steps">
     <li><code>/wf-prime</code> — <b>once per repo.</b> Writes a reusable <code>CONTEXT.md</code> operating manual.</li>
-    <li><code>/wf-spec&nbsp;ENG-12&nbsp;ENG-13</code> — <b>interactive.</b> Refine each ticket into a real spec, saved to its Linear description.</li>
+    <li><code>/wf-spec&nbsp;ENG-12&nbsp;ENG-13</code> — <b>interactive.</b> Refine each ticket into a real spec, posted as a comment on its Linear ticket (description becomes a short brief).</li>
     <li><code>/wf-run&nbsp;ENG-12&nbsp;ENG-13</code> — <b>autonomous.</b> Each ticket → an open PR, ticket set <i>In Review</i>.</li>
     <li><b>You</b> review &amp; merge the PR.</li>
     <li>Tell it <code>"ENG-12 is merged"</code> — only now does it set <i>Done</i> and clean up the worktree.</li>
@@ -143,7 +143,7 @@
   <h2>The 5 Commands</h2>
   <div class="cmds">
     <div class="cmd"><span class="c">/wf-prime</span><span class="when">once per repo</span><p>wf-cartographer writes <code>CONTEXT.md</code> — the durable, reusable operating manual. Highest leverage-per-token move.</p></div>
-    <div class="cmd"><span class="c">/wf-spec</span><span class="when">run first · interactive</span><p>Refines each ticket with you (one at a time) and writes the spec into its Linear <b>description</b>. Ticket stays in <i>To&nbsp;Do</i>.</p></div>
+    <div class="cmd"><span class="c">/wf-spec</span><span class="when">run first · interactive</span><p>Refines each ticket with you (one at a time) and posts the spec as a marked <b>comment</b> on its Linear ticket; the description becomes a short brief. Ticket stays in <i>To&nbsp;Do</i>.</p></div>
     <div class="cmd"><span class="c">/wf-run</span><span class="when">autonomous · seq or <code>--parallel</code></span><p>Each ticket A→Z in its own worktree: <i>In&nbsp;Progress</i> → plan → build → review → verify → open PR → <i>In&nbsp;Review</i>. <code>--parallel</code> runs file-disjoint tickets concurrently (≤3) via <code>wf-runner</code>.</p></div>
     <div class="cmd"><span class="c">/wf-eval</span><span class="when">regression gate · offline</span><p>Stage-evals the planner &amp; executor over seed cases, judged by <code>wf-judge</code> vs a baseline. Run after tuning any agent/model.</p></div>
     <div class="cmd"><span class="c">/wf-calibrate</span><span class="when">validates the judge · offline</span><p>Grades <code>wf-judge</code> against a human-labeled gold set (agreement, FAIL precision/recall, bias probes) so the <code>/wf-eval</code> gate can be trusted. Re-run after changing the judge.</p></div>
@@ -177,7 +177,7 @@
         <p class="note">Reads the MANUAL + code, researches genuine unknowns, resolves every ambiguity.</p>
       </div></div>
       <div class="step"><div class="rail"><div class="node"></div></div><div class="body">
-        <div class="act"><span class="pill ha">wf-linear</span><span class="arr">UPDATE_DESCRIPTION</span><span class="note" style="margin:0">spec written back into the ticket</span></div>
+        <div class="act"><span class="pill ha">wf-linear</span><span class="arr">POST_COMMENT + UPDATE_DESCRIPTION</span><span class="note" style="margin:0">spec → ticket comment, brief → description</span></div>
       </div></div>
     </div>
   </div>
@@ -306,7 +306,7 @@
     <li><b class="key">Never</b> merges, waits for checks, or sets Linear <b>Done</b> autonomously — that needs your explicit go-ahead, after <code>wf-github</code> confirms MERGED.</li>
     <li>Branch naming <code>ticket-id/slug</code>; worktrees in <code>ROOT/.worktrees/</code> — kept on failure, removed on merge.</li>
     <li>Each ticket isolated in its own worktree — sequential by default, or concurrent under <code>--parallel</code> (≤3, file-disjoint) — never PR-stacked on another ticket's unmerged work.</li>
-    <li>Refined spec is written to the Linear <b>ticket description</b> — no <code>.planning/</code> files anywhere.</li>
+    <li>Refined spec is posted as a marked Linear ticket <b>comment</b> (latest wins); the description holds a short brief — no <code>.planning/</code> files anywhere.</li>
     <li>PR descriptions are concise &amp; high-fidelity (What / Why / Changes / Verification). No filler.</li>
     <li>All project code runs <b>sandboxed</b> via <code>wf-exec</code>; executor commits carry a <code>Co-Authored-By: Claude</code> trailer.</li>
     <li>Every agent embeds the same engineering discipline: surgical, simple, goal-driven.</li>

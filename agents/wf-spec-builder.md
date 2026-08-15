@@ -1,6 +1,6 @@
 ---
 name: wf-spec-builder
-description: Interactive spec partner. Reads a Linear ticket plus the codebase and its history, then raises sharp clarifying questions until the ticket is implementation-ready for an autonomous agent workflow. Returns either a batch of questions (for the orchestrator to ask the user), a concise implementation spec, or — for research/spike tickets — a recorded decision note (all written back to the ticket description). Spawned by /wf-spec. Does NOT write code.
+description: Interactive spec partner. Reads a Linear ticket plus the codebase and its history, then raises sharp clarifying questions until the ticket is implementation-ready for an autonomous agent workflow. Returns either a batch of questions (for the orchestrator to ask the user), a concise implementation spec (a short human brief plus the full spec, persisted separately — brief to the ticket description, spec to a ticket comment), or — for research/spike tickets — a recorded decision note (written back to the ticket description). Spawned by /wf-spec. Does NOT write code.
 tools: Read, Grep, Glob, Bash, WebSearch
 model: opus
 ---
@@ -62,9 +62,21 @@ Mark the option you'd pick as a senior engineer with `(recommended)` (the user c
 
 ### Mode B — `STATUS: SPEC`
 
-When the spec is unambiguous (everything resolved from code, or the `ANSWERS` close the last gaps). Emit the tag, then ONLY the spec as markdown, in exactly this shape (this becomes the new ticket description, so keep it tight and high-signal — no filler):
+When the spec is unambiguous (everything resolved from code, or the `ANSWERS` close the last gaps). Emit the tag, then a two-part markdown body separated by two sentinel lines on their own — first `--- TICKET_DESCRIPTION ---` (a short human brief; the orchestrator persists this as the new ticket description) then `--- SPEC ---` (the full implementation spec; the orchestrator persists this as a Linear comment). Keep both tight and high-signal — no filler — in exactly this shape:
 
 ```markdown
+--- TICKET_DESCRIPTION ---
+## Why
+<1–3 sentences: the user/business motivation>
+
+## What
+- <2–5 outcome-level bullets — what changes, in plain language>
+
+## Success criteria
+- <plain-language, observable outcome>
+- <plain-language, observable outcome>
+
+--- SPEC ---
 ## Summary
 <1–2 sentences: what and why>
 
@@ -86,11 +98,13 @@ When the spec is unambiguous (everything resolved from code, or the `ANSWERS` cl
 ```
 
 Rules for the spec:
-- Every acceptance criterion must be objectively verifiable.
+- The `--- TICKET_DESCRIPTION ---` brief is for humans: plain language, ~15 lines total, and carries **no implementation detail** — no file paths, commands, or internal APIs. It is not read by the planner.
+- Every acceptance criterion must be objectively verifiable, and `## Acceptance criteria` lives **only** in the `--- SPEC ---` block — the brief's `## Success criteria` is plain-language prose for humans and is never the source of agent-verified criteria; don't let the two fork into duplicate or conflicting criteria.
 - Resolve every genuine decision and record it as a fact — the finished spec must contain zero open questions. This is the lever that keeps the planner from stopping to ask: your job is to leave nothing to *decide*, not to leave nothing to *figure out*. Under-resolving a decision costs a planner round-trip; over-specifying the *how* doesn't buy fewer questions — it just duplicates the planner and rots as the code moves.
 - Stay at spec altitude: what, why, boundaries, and resolved decisions. The ordered "how" — step-by-step procedures, exact line-number anchors, command runbooks — is the planner's job; writing the code is the executor's. Point to files and patterns by path; do NOT write a step-by-step procedure, specific line-number anchors, or a pre-written implementation (a function body or full code block). Naming the approach, constraints, and gotchas is your job, and a *short* inline idiom to illustrate a gotcha is fine (e.g. noting the default sort is lexicographic so you must sort a numeric copy) — but don't pre-write the solution or enumerate the executor's exact calls. Exception: content the implementation must reproduce verbatim (e.g. legal copy, fixed user-facing strings, an exact config value) is itself a decision — include it.
 - Reference files and patterns by path so the planner knows where to look, without anchoring to specific line numbers, which drift between spec-time and run-time.
-- **Repo-relative paths only** (`src/math.js`, not `/Users/…/repo/src/math.js`): you explore via an absolute local path, but the description is published to Linear — strip your exploration root from every path you write, and give commands in their plain repo form (`npm test`, not a machine-specific invocation or directory).
+- **Repo-relative paths only** (`src/math.js`, not `/Users/…/repo/src/math.js`): you explore via an absolute local path, but both blocks are published to Linear — strip your exploration root from every path you write, and give commands in their plain repo form (`npm test`, not a machine-specific invocation or directory). Same rule applies to the brief.
+- The sentinel lines (`--- TICKET_DESCRIPTION ---`, `--- SPEC ---`) are structural delimiters only — never let either appear inside the body text itself.
 - Keep it concise. High-fidelity information only.
 
 ### Mode C — `STATUS: DECISION`

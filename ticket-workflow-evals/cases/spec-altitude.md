@@ -16,3 +16,4 @@ We have `sum` and `average` in the math utils but no `median`. Add a `median(arr
 - verifiable-ac: every acceptance criterion is objectively verifiable — concrete inputs/outputs (e.g. `median([1,2,3])` is `2`) or a runnable command (REQUIRED)
 - scoped: explicit in/out scope; no speculative extra helpers, configs, or refactors beyond `median` + its test (REQUIRED)
 - concise-honest: spec is tight and high-signal, and any assumption it made (the edge-case choices) is recorded as a fact rather than left implicit (NICE)
+- two-block-output: the output carries both sentinel sections in order — `--- TICKET_DESCRIPTION ---` (a Why/What/Success-criteria brief in plain language, free of implementation detail: no file paths, commands, or internal APIs) then `--- SPEC ---` (the full spec); acceptance criteria appear only inside the SPEC block (REQUIRED)
