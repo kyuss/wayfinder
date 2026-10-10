@@ -29,6 +29,8 @@ Run once, up front. **Fail fast here** — every check below is cheap; do them a
 
 ## Per ticket (default — sequential; each fully isolated in its own worktree)
 
+Post one status line as each ticket moves stage (planned → executing → PR open) so the user can follow a long batch.
+
 > This is the default mode. If `$ARGUMENTS` contains `--parallel`, skip to **Parallel mode** below instead; it reuses the same preconditions, sandbox/worktree discipline, PR template, integration stage, and after-all reporting.
 
 ### 1. Fetch
@@ -41,7 +43,7 @@ Run once, up front. **Fail fast here** — every check below is cheap; do them a
 - Branch name: `<identifier>/<BRANCH_SLUG>` (e.g. `ENG-123/add-oauth-login`). Lowercase the slug; keep the identifier as Linear returns it. Worktree path: `ROOT/.worktrees/<identifier>`.
 - **Reuse if it already exists** (a prior run for this ticket): if `ROOT/.worktrees/<identifier>` is already a registered worktree (`git worktree list`) on the matching branch, reuse it as-is — this is a resume; keep its existing commits and continue. Only if the path exists but is stale/mismatched, ask the user before removing it.
 - Otherwise create fresh from latest base: `git worktree add "<path>" -b "<branch>" "origin/<BASE>"`. If the branch already exists but no worktree does, attach instead: `git worktree add "<path>" "<branch>"`.
-- **Now** set status (after the worktree is in place, so a failed setup never leaves a ticket falsely In Progress): spawn `wf-linear` `SET_STATUS <identifier> "In Progress"` (skip if already In Progress/In Review). Do this silently — don't narrate or justify the transition (no "the status change is authorized…" / "deps warmed offline" asides); it's a routine step.
+- **Now** set status (after the worktree is in place, so a failed setup never leaves a ticket falsely In Progress): spawn `wf-linear` `SET_STATUS <identifier> "In Progress"` (skip if already In Progress/In Review). It's a routine step: report it only in the final table, without justification.
 - **Worktree-path discipline — pass this rule to every agent:** ALL of its file operations must target the absolute worktree path — `Bash` commands `cd "<path>"` first; `Read`/`Edit`/`Write`/`Grep`/`Glob` use absolute paths under `<path>`. Repo-relative paths resolve to `ROOT` (the main checkout — the WRONG tree) and silently corrupt the run. The only exception is reading `MANUAL`, which is at `ROOT` by design.
 
 ### 2b. Warm dependencies (offline — once per worktree)

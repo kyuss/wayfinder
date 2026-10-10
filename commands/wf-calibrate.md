@@ -10,7 +10,7 @@ An LLM judge is untrustworthy until it agrees with you. This grades `wf-judge` a
 
 ## Layout
 - `CAL = ~/.claude/ticket-workflow-evals/calibration`
-- `CAL/artifacts/*.md` — stored artifacts to judge. Each contains `stage`, `case`/`fixture`, a `## TICKET`, the matching `## RUBRIC:<stage>`, and the `## ARTIFACT` to grade. These are **real past outputs** — deliberately include both PASS and FAIL examples (~50/50), with a few known-bad ones (missed criterion, hollow/mocked test, over-engineering).
+- `CAL/artifacts/*.md` — stored artifacts to judge. Each contains `stage`, `case`/`fixture`, a `## TICKET`, the matching `## RUBRIC:<stage>`, and the `## ARTIFACT` to grade (review-stage artifacts also carry the case's `## MUTATION`). These are **real past outputs** — deliberately include both PASS and FAIL examples (~50/50), with a few known-bad ones (missed criterion, hollow/mocked test, over-engineering).
 - `CAL/gold.md` — your ground-truth labels: one row per artifact (`artifact | human PASS/FAIL | reason | probe-group`).
 - `CAL/reports/` — saved calibration reports.
 
@@ -20,8 +20,8 @@ An LLM judge is untrustworthy until it agrees with you. This grades `wf-judge` a
 ## Run
 1. Parse `gold.md` into rows: `{artifact, human, reason, probe-group}`.
 2. For each artifact named in `gold.md` (process them ≤4 judges at a time to stay cheap):
-   - Parse its `stage`, `case`, `## TICKET`, `## RUBRIC:<stage>`, and `## ARTIFACT`.
-   - Spawn `wf-judge` with `STAGE`, the `CASE` (TICKET + RUBRIC + fixture path), and `ARTIFACT` — **exactly** the inputs `/wf-eval` gives it. Record its `OVERALL` PASS/FAIL + score.
+   - Parse its `stage`, `case`, `## TICKET`, `## RUBRIC:<stage>`, `## ARTIFACT`, and (review stage) `## MUTATION`.
+   - Spawn `wf-judge` with `STAGE`, the `CASE` (TICKET + RUBRIC + fixture path, plus MUTATION for review), and `ARTIFACT` — **exactly** the inputs `/wf-eval` gives it. Record its `OVERALL` PASS/FAIL + score.
    - **Blind:** never pass the human label or reason to the judge.
 3. Compare each judge verdict to its human label.
 

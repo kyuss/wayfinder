@@ -107,4 +107,4 @@ Print a compact summary: each identifier → `spec written` / `decision recorded
 
 ## Notes
 - If `wf-linear` returns `ERROR`, surface it plainly and ask the user how to proceed — don't guess ticket data.
-- Keep your own prose terse — your job in the loop is to relay the builder's questions to the user and its spec back. Don't editorialize the round-trip (no "the builder couldn't reach you, so…" narration); just ask the questions and move on.
+- Keep your own prose terse — your job in the loop is to relay the builder's questions to the user and its spec back. Relay the questions directly, without explaining why they're coming from you.
