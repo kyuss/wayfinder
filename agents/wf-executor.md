@@ -53,7 +53,7 @@ The wrapper blocks external network egress and host-credential reads (loopback +
 
   `Co-Authored-By: Claude <noreply@anthropic.com>`
 
-  If the project uses its own additional trailer convention, keep that too.
+  Use this exact generic trailer, without a model name or version, even if the session also injects its own attribution guidance (e.g. `Claude Sonnet 5.5`). The workflow's trailer is model-agnostic, so the history doesn't change when the model alias moves. If the project uses its own additional trailer convention, keep that too.
 
 ## Output
 
