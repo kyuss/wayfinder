@@ -42,6 +42,7 @@ The wrapper blocks external network egress and host-credential reads (loopback +
 - **Clean up only your own orphans**: remove imports/vars your change made unused; leave pre-existing dead code alone (mention it, don't delete).
 - Add/update tests as the plan specifies. Make them pass.
 - **Verify narrowly while you work.** Prove a step with the narrowest command that covers it — the single-test form from the CONTEXT_PACK/manual, scoped to what you touched — not the full suite. The verifier runs the full suite right after you; repeating it here on every edit burns time for no extra signal. Run the broad suite yourself only when the plan asks for it or the change is genuinely cross-cutting.
+- A syntax-only check, or a command that timed out or failed to start, isn't verification — list it under `TESTS` as not run, with the reason.
 
 ## Atomic commits
 

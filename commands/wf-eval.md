@@ -33,7 +33,7 @@ For research/spike cases, where the deliverable is a recorded decision, not code
 2. Spawn `wf-judge` with `STAGE=decision`, the case (TICKET + `RUBRIC:decision`), and `ARTIFACT`. Record its verdict. (No branch or reset needed — the decision stage only reads the fixture.)
 
 ### Stage: plan
-1. Spawn `wf-planner` with: the case TICKET as the enriched ticket, the fixture path as the worktree, `MANUAL=none`, `PR_HISTORY=none`, and this flag: **"EVAL MODE — non-interactive: do NOT call AskUserQuestion; if you would ask the user, instead state it in `SPEC_GAPS` and proceed conservatively."** Capture its full output as `ARTIFACT`.
+1. Spawn `wf-planner` with: the case TICKET as the enriched ticket, the fixture path as the worktree, `MANUAL=none`, `PR_HISTORY=none`, and this flag: **"EVAL MODE — non-interactive: do NOT return `STATUS: NEEDS_INPUT`; resolve each open decision conservatively, record it in `SPEC_GAPS`, and produce your best `STATUS: PLAN`."** Capture its full output as `ARTIFACT`.
 2. Spawn `wf-judge` with `STAGE=plan`, the case (TICKET + `RUBRIC:plan`), and `ARTIFACT`. Record its verdict.
 
 ### Stage: execute
