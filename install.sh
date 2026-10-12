@@ -8,7 +8,9 @@
 # whether the two guard hooks are wired and warns loudly until they are.
 #
 # Re-runnable: it overwrites only wf-* files it owns and leaves everything else alone.
-# Usage: ./install.sh
+# Usage: ./install.sh [--enable-tick <repo-path> | --disable-tick <repo-path>]
+#   --enable-tick  also schedule an unattended /wf-tick sweep for that repo (one launchd agent per repo,
+#                  every 300 s). Nothing is scheduled unless you ask. --disable-tick removes it.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,6 +19,39 @@ CLAUDE="${CLAUDE_HOME:-$HOME/.claude}"
 say()  { printf '\033[1m%s\033[0m\n' "$*"; }
 warn() { printf '\033[33m! %s\033[0m\n' "$*"; }
 err()  { printf '\033[1;31m!! %s\033[0m\n' "$*"; }
+
+usage() { echo "usage: ./install.sh [--enable-tick <repo-path> | --disable-tick <repo-path>]" >&2; exit 2; }
+
+# --- optional unattended-tick flags (parsed first; plain ./install.sh never touches launchd) ---
+TICK_MODE=""; TICK_PATH=""
+case "${1:-}" in
+  "")                            ;;
+  --enable-tick|--disable-tick)  [ $# -eq 2 ] || usage; TICK_MODE="${1#--}"; TICK_PATH="$2" ;;
+  *)                             usage ;;
+esac
+
+# Per-repo key: readable basename + path hash (two repos can share a basename).
+# KEEP IN SYNC with the KEY derivation in bin/wf-tick — log, lock and launchd label all derive from it.
+tick_key() { printf '%s' "${1##*/}" | tr -c 'A-Za-z0-9._-' '_'; printf -- '-%s' "$(printf '%s' "$1" | shasum | cut -c1-8)"; }
+
+if [ -n "$TICK_MODE" ]; then
+  if [ "$TICK_MODE" = disable-tick ]; then
+    # The repo may be gone by now; fall back to the path as given.
+    TICK_REPO="$(git -C "$TICK_PATH" rev-parse --show-toplevel 2>/dev/null || (cd "$TICK_PATH" 2>/dev/null && pwd) || echo "$TICK_PATH")"
+  else
+    TICK_REPO="$(git -C "$TICK_PATH" rev-parse --show-toplevel)" || { err "not a git repo: $TICK_PATH"; exit 1; }
+  fi
+  TICK_KEY="$(tick_key "$TICK_REPO")"
+  TICK_LABEL="com.wayfinder.wf-tick.$TICK_KEY"
+  TICK_PLIST="$HOME/Library/LaunchAgents/$TICK_LABEL.plist"
+fi
+
+if [ "$TICK_MODE" = disable-tick ]; then
+  # Runs before the copy step: disabling must not require (or perform) a reinstall.
+  launchctl bootout "gui/$(id -u)/$TICK_LABEL" 2>/dev/null || true
+  if [ -f "$TICK_PLIST" ]; then rm -f "$TICK_PLIST"; say "Removed $TICK_LABEL"; else say "Tick not enabled for $TICK_REPO"; fi
+  exit 0
+fi
 
 say "Installing Wayfinder into $CLAUDE"
 
@@ -37,9 +72,9 @@ mkdir -p "$CLAUDE"/{agents,commands,bin,hooks}
 
 cp "$REPO"/agents/wf-*.md      "$CLAUDE/agents/"
 cp "$REPO"/commands/wf-*.md    "$CLAUDE/commands/"
-cp "$REPO"/bin/wf-exec "$REPO"/bin/wf-fetch-handoff "$CLAUDE/bin/"
+cp "$REPO"/bin/wf-exec "$REPO"/bin/wf-fetch-handoff "$REPO"/bin/wf-tick "$CLAUDE/bin/"
 cp "$REPO"/hooks/wf-*.sh       "$CLAUDE/hooks/"
-chmod +x "$CLAUDE"/bin/wf-exec "$CLAUDE"/bin/wf-fetch-handoff "$CLAUDE"/hooks/wf-*.sh
+chmod +x "$CLAUDE"/bin/wf-exec "$CLAUDE"/bin/wf-fetch-handoff "$CLAUDE"/bin/wf-tick "$CLAUDE"/hooks/wf-*.sh
 
 # --- generate the sandbox profile for this machine -----------------------------
 # The seatbelt profile needs literal absolute paths; fill in this machine's dirs —
@@ -92,6 +127,64 @@ else
 EOF
 fi
 echo
+
+# --- optional: schedule the unattended tick for one repo (launchd, macOS) ---------
+if [ "$TICK_MODE" = enable-tick ]; then
+  [ "$(uname)" = Darwin ] || { err "--enable-tick needs macOS launchd"; exit 1; }
+  command -v claude >/dev/null 2>&1 || { err "--enable-tick needs the claude CLI on PATH"; exit 1; }
+
+  TICK_MANUAL="$(ls "$TICK_REPO"/CONTEXT.md "$TICK_REPO"/CLAUDE.md "$TICK_REPO"/AGENTS.md 2>/dev/null | head -n 1)"
+  # Uncommented 'enabled: true' under '## Automation' (lines inside <!-- --> don't count).
+  if [ -z "$TICK_MANUAL" ] || ! awk '
+        /<!--/ { c = 1 } c { if (/-->/) c = 0; next }
+        /^## /  { a = ($0 ~ /^## Automation/) }
+        a && /^- *enabled: *true/ { f = 1 }
+        END { exit !f }' "$TICK_MANUAL"; then
+    warn "$TICK_REPO has no uncommented 'enabled: true' under '## Automation' — ticks will no-op until you add it."
+  fi
+
+  # launchd starts jobs with a minimal PATH; give it the dir of 'claude' plus this shell's PATH.
+  TICK_PATHENV="$(dirname "$(command -v claude)"):$PATH"
+  xml() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
+  TICK_LOG="$CLAUDE/wf-tick/logs/$TICK_KEY.launchd.log"
+  mkdir -p "$HOME/Library/LaunchAgents" "$CLAUDE/wf-tick/logs"
+
+  cat >"$TICK_PLIST" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$(xml "$TICK_LABEL")</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>$(xml "$CLAUDE/bin/wf-tick")</string>
+    <string>$(xml "$TICK_REPO")</string>
+  </array>
+  <key>StartInterval</key><integer>300</integer>
+  <key>RunAtLoad</key><false/>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>$(xml "$TICK_PATHENV")</string>
+    <key>HOME</key><string>$(xml "$HOME")</string>
+    <key>CLAUDE_HOME</key><string>$(xml "$CLAUDE")</string>
+  </dict>
+  <key>StandardOutPath</key><string>$(xml "$TICK_LOG")</string>
+  <key>StandardErrorPath</key><string>$(xml "$TICK_LOG")</string>
+</dict>
+</plist>
+PLIST
+  plutil -lint "$TICK_PLIST" >/dev/null || { err "generated plist is invalid: $TICK_PLIST"; exit 1; }
+
+  launchctl bootout "gui/$(id -u)/$TICK_LABEL" 2>/dev/null || true
+  launchctl bootstrap "gui/$(id -u)" "$TICK_PLIST"
+  say "Tick enabled: $TICK_LABEL (every 300 s) for $TICK_REPO"
+  echo "  log: $CLAUDE/wf-tick/logs/$TICK_KEY.log"
+  echo "  Ticks run with your existing Claude Code permission settings and must not need prompts"
+  echo "  (claude -p cannot answer them) — pre-approve what /wf-spec and /wf-run need."
+  echo
+fi
+
 say "Then, in Claude Code:"
 echo "  - Connect the Linear MCP:  /mcp"
 echo "  - Verify gh is authed:     gh auth status"
