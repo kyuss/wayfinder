@@ -133,7 +133,10 @@ if [ "$TICK_MODE" = enable-tick ]; then
   [ "$(uname)" = Darwin ] || { err "--enable-tick needs macOS launchd"; exit 1; }
   command -v claude >/dev/null 2>&1 || { err "--enable-tick needs the claude CLI on PATH"; exit 1; }
 
-  TICK_MANUAL="$(ls "$TICK_REPO"/CONTEXT.md "$TICK_REPO"/CLAUDE.md "$TICK_REPO"/AGENTS.md 2>/dev/null | head -n 1)"
+  TICK_MANUAL=""
+  for f in CONTEXT.md CLAUDE.md AGENTS.md; do
+    if [ -f "$TICK_REPO/$f" ]; then TICK_MANUAL="$TICK_REPO/$f"; break; fi
+  done
   # Uncommented 'enabled: true' under '## Automation' (lines inside <!-- --> don't count).
   if [ -z "$TICK_MANUAL" ] || ! awk '
         /<!--/ { c = 1 } c { if (/-->/) c = 0; next }
