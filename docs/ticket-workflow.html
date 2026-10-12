@@ -145,6 +145,7 @@
     <div class="cmd"><span class="c">/wf-prime</span><span class="when">once per repo</span><p>wf-cartographer writes <code>CONTEXT.md</code> — the durable, reusable operating manual. Highest leverage-per-token move.</p></div>
     <div class="cmd"><span class="c">/wf-spec</span><span class="when">run first · interactive</span><p>Refines each ticket with you (one at a time) and posts the spec as a marked <b>comment</b> on its Linear ticket; the description becomes a short brief. Ticket stays in <i>To&nbsp;Do</i>.</p></div>
     <div class="cmd"><span class="c">/wf-run</span><span class="when">autonomous · seq or <code>--parallel</code></span><p>Each ticket A→Z in its own worktree: <i>In&nbsp;Progress</i> → plan → build → review → verify → open PR → <i>In&nbsp;Review</i>. <code>--parallel</code> runs file-disjoint tickets concurrently (≤3) via <code>wf-runner</code>.</p></div>
+    <div class="cmd"><span class="c">/wf-tick</span><span class="when">opt-in · unattended · launchd</span><p>One idempotent sweep per repo: resumes answered tickets, specs tickets in the trigger state, builds <i>Ready&nbsp;for&nbsp;Development</i> — only for the repo&#39;s listed Linear projects. Never prompts: questions become Linear comments, problems become <code>wf:*</code> labels.</p></div>
     <div class="cmd"><span class="c">/wf-eval</span><span class="when">regression gate · offline</span><p>Stage-evals the planner &amp; executor over seed cases, judged by <code>wf-judge</code> vs a baseline. Run after tuning any agent/model.</p></div>
     <div class="cmd"><span class="c">/wf-calibrate</span><span class="when">validates the judge · offline</span><p>Grades <code>wf-judge</code> against a human-labeled gold set (agreement, FAIL precision/recall, bias probes) so the <code>/wf-eval</code> gate can be trusted. Re-run after changing the judge.</p></div>
   </div>
@@ -296,6 +297,7 @@
     <div class="f"><h3>Fixtures</h3><p>Tiny dependency-free git repos (<code>node-toy</code>, <code>py-toy</code>) whose stdlib tests run inside the no-network sandbox. Reset clean between stages.</p></div>
     <div class="f"><h3>Seed cases + rubrics</h3><p>Four: <code>node-feature</code>, <code>node-bugfix</code>, <code>py-feature</code>, and <code>ambiguous-spec</code> — which checks the planner <i>refuses to invent scope</i> (and stays non-interactive in eval mode).</p></div>
     <div class="f"><h3>Stage evals</h3><p><b>plan</b> judges the planner's output; <b>execute</b> judges the executor's diff + whether the fixture tests actually pass (sandboxed).</p></div>
+    <div class="f"><h3>Route stage</h3><p>Offline, no fixture: <code>wf-route-sim</code> dry-runs an orchestrator command (<code>--headless</code>, <code>/wf-tick</code>) against canned responses and <code>wf-judge</code> grades the action trace — no prompts, right writes, no forbidden ones.</p></div>
     <div class="f"><h3>Judge + baseline</h3><p><code>wf-judge</code> scores each (gate, then 0–1, weighting observed test results highest); the runner flags regressions vs the saved baseline (PASS→FAIL or score drop &gt; 0.15).</p></div>
     <div class="f"><h3>Trusting the judge</h3><p><code>/wf-calibrate</code> grades <code>wf-judge</code> against a human-labeled gold set — agreement (bar ≥90%), FAIL precision/recall, bias probes — so the gate itself is trustworthy. Re-run after changing the judge.</p></div>
   </div>
@@ -309,6 +311,7 @@
     <li>Refined spec is posted as a marked Linear ticket <b>comment</b> (latest wins); the description holds a short brief — no <code>.planning/</code> files anywhere.</li>
     <li>PR descriptions are concise &amp; high-fidelity (What / Why / Changes / Verification). No filler.</li>
     <li>All project code runs <b>sandboxed</b> via <code>wf-exec</code>; executor commits carry a <code>Co-Authored-By: Claude</code> trailer.</li>
+    <li><b class="key">Headless never prompts</b> — <code>--headless</code> and <code>/wf-tick</code> never ask; every prompt point becomes a Linear comment + park or a <code>wf:*</code> label. Opt-in per repo.</li>
     <li>Every agent embeds the same engineering discipline: surgical, simple, goal-driven.</li>
   </ul>
 

@@ -14,13 +14,14 @@ A Linear-ticket → GitHub-PR autonomous coding workflow built from specialized 
 /wf-run  ENG-12 ENG-13 # autonomous — each ticket → open PR, In Review
                             # …you review & merge the PR yourself…
 "ENG-12 is merged"          # only now does the workflow set Done + clean up
+                            # (opt in to /wf-tick and Backlog → Todo is the only manual move)
 ```
 
 Run `/wf-eval` whenever you change an agent prompt, a model tier, or the flow — it's the regression gate.
 
 ---
 
-## Agents (10)
+## Agents (11)
 
 **Reasoning agents — do the thinking:**
 
@@ -51,6 +52,7 @@ Run `/wf-eval` whenever you change an agent prompt, a model tier, or the flow �
 | Agent | Model | Job |
 |---|---|---|
 | `wf-judge` | sonnet | LLM-as-judge: scores another agent's output (a plan, or a diff + test result) against a case rubric — binary pass/fail + 0–1 per dimension. Weights *observed test results* above the diff's prose or the agent's own claims. |
+| `wf-route-sim` | sonnet | Eval-only: dry-runs an orchestrator command (e.g. `/wf-run --headless`, `/wf-tick`) against canned agent responses and emits an action trace for `wf-judge` to grade. Touches nothing; never used in `/wf-run` or `/wf-tick`. |
 
 Each agent leads with concrete *operating standards* (how a senior in that role behaves), not just a title. Model tiering is deliberate: **Opus** where reasoning has the highest impact (decisions, architecture, bug-catching), **Sonnet** for execution/verification/grading, **Haiku** for high-volume structured external calls.
 
@@ -58,11 +60,12 @@ Each agent leads with concrete *operating standards* (how a senior in that role 
 
 ---
 
-## Commands (5)
+## Commands (6)
 
 - **`/wf-prime`** — run once per repo. `wf-cartographer` writes a compact `CONTEXT.md` operating manual (~100–180 dense lines: stack, architecture map, conventions, exact build/test/lint commands, gotchas). Recommended to commit it. Optional, but the highest leverage-per-token move in the system.
 - **`/wf-spec <ids>`** — interactive, run first. Refines each ticket *one at a time* in conversation with you and posts the spec as a marked comment on its Linear ticket, rewriting the description to a short Why/What/Success-criteria brief. The ticket stays in *To Do*.
 - **`/wf-run <ids> [--parallel]`** — autonomous A→Z. Each ticket runs in its own git worktree, from *In Progress* to an open PR (*In Review*). Default is **sequential** (one ticket at a time); `--parallel` runs file-disjoint tickets **concurrently** (≤3 at once) via `wf-runner`. Never merges.
+- **`/wf-tick [--dry-run]`** — opt-in, unattended. One idempotent sweep (run by launchd via `bin/wf-tick`) that resumes answered tickets, specs tickets in the trigger state, and builds Ready-for-Development tickets, limited to the repo's Linear projects. Uses `--headless` modes of `/wf-spec` and `/wf-run` that never prompt. See *Unattended mode*.
 - **`/wf-eval [case ...]`** — the regression gate. Runs stage evals (planner, executor) over seed cases against local fixtures, judged by `wf-judge`, and compares to the saved baseline. Fully offline — never touches Linear/GitHub.
 - **`/wf-calibrate`** — validates the *judge* itself. Grades `wf-judge` against a human-labeled gold set (agreement, FAIL-class precision/recall, bias probes) so the `/wf-eval` gate can be trusted. Fully offline; re-run after changing the judge's model or prompt.
 
@@ -149,6 +152,27 @@ plan all (∥, non-interactive) ─▶ OVERLAP GUARD: split by "files in play"
 
 ---
 
+## Unattended mode (`/wf-tick`)
+
+Opt-in, per repo. One scheduled sweep advances tickets so the only manual move is **Backlog → Todo**; a human still reviews and merges every PR.
+
+```
+Todo ──▶ (wf-spec --headless) ──▶ Ready for Development ──▶ (wf-run --headless) ──▶ In Review (PR open)
+  │                                      ▲   │
+  │ questions open                       │   └─ build needs input ─▶ Needs Answers
+  └──────────▶ Needs Answers ── answered ┘      (planner questions posted as a comment; parked, worktree kept)
+```
+
+- **Config** — an uncommented `## Automation` section in the repo manual (`CONTEXT.md`): `enabled: true`, `linear-projects: <name or slug>, …` (required), `trigger-state` (default `Todo`), `max-runs-per-tick` (default 3). No section, `enabled` false, or no projects → the tick exits without calling Linear.
+- **Phases, strictly in order** — (1) resume *Needs Answers* tickets (`/wf-spec --linear --headless`); (2) spec tickets in the trigger state (`/wf-spec --linear --headless`); (3) build *Ready for Development* tickets (`/wf-run --parallel --headless`), at most `max-runs-per-tick` per tick across all projects. `/wf-tick --dry-run` prints what each phase would do, grouped by project, and changes nothing.
+- **Project scope** — only tickets whose Linear project is listed are ever read, commented, or transitioned. Projects may span teams; states and labels resolve per ticket's own team. A listed project that does not exist is reported as an error and the rest still run. **Project ownership:** list each Linear project in exactly one repo (not enforced).
+- **Never prompts** — `--headless` never calls `AskUserQuestion`. Instead: un-spec'd ticket → back to the trigger state; planner questions → `🤖 Spec questions` comment + *Needs Answers*; spec built with defaulted answers → still moves to Ready for Development but gets `wf:hold` plus a comment naming the defaults; build needs a human → comment + `wf:needs-human`; stale worktree or offline dependency failure → comment + `wf:failed`.
+- **Labels** — `wf:hold` (a human pauses the build), `wf:failed` (setup problem; clear the label to retry), `wf:needs-human` (build paused). Tickets carrying any of them are skipped by every phase.
+- **Wrapper** — `bin/wf-tick <repo>` takes a per-repo lock (atomic `mkdir`; a lock older than 2 h is treated as stale) and runs `claude -p "/wf-tick" --model sonnet` in the repo, appending to `~/.claude/wf-tick/logs/<repo>-<hash>.log`. The log has no rotation. It adds no permission flags: ticks run under your existing permission settings and must not need prompts.
+- **Schedule** — `./install.sh --enable-tick <repo>` writes one launchd agent per repo (every 300 s, label `com.wayfinder.wf-tick.<repo>-<hash>`); `--disable-tick <repo>` removes it. Plain `./install.sh` schedules nothing; several repos run side by side.
+
+---
+
 ## Per-ticket lifecycle in detail
 
 The non-obvious operational guarantees inside `/wf-run`:
@@ -210,6 +234,7 @@ The workflow ingests untrusted text (Linear ticket descriptions, GitHub PR/commi
 - **Fixtures** — tiny, dependency-free git repos (`node-toy`, `py-toy`) whose tests run via stdlib (`node --test`, `python3 -m unittest`) so they pass inside the no-network sandbox. Fixtures are reset between stages (`git checkout -- . && git clean -fd && git checkout main`) so each eval starts clean.
 - **Seed cases** (`cases/*.md`) — a mock ticket + the fixture it runs against + a per-stage rubric (REQUIRED/NICE dimensions). Ships with **four**: `node-feature`, `node-bugfix`, `py-feature`, and `ambiguous-spec` (which checks the planner *refuses to invent scope*).
 - **Stages** — `plan` judges `wf-planner`'s output; `execute` judges `wf-executor`'s diff + whether the fixture's tests actually pass. Fixture tests are run sandboxed via `wf-exec`.
+- **Route stage (offline, no fixture)** — judges an orchestrator command's routing (`/wf-run --headless`, `/wf-spec --headless`, `/wf-tick`): `wf-route-sim` dry-runs the command against canned agent responses and `wf-judge` grades the action trace (no prompts, required/forbidden writes, comment markers). Cases use `fixture: none`.
 - **Eval mode is non-interactive.** In fixture mode the planner gets an explicit flag: do NOT call `AskUserQuestion`; if it would ask, it states the issue in `SPEC_GAPS` and proceeds conservatively.
 - **Judge + baseline.** `wf-judge` scores each stage against the rubric (binary gate, then 0–1, weighting observed test results highest). The runner prints a `case | stage | PASS/FAIL | score | biggest weakness` table and compares to `baselines/baseline.md`, flagging a **regression** when a case went PASS→FAIL or its score dropped **> 0.15**.
 
@@ -227,6 +252,7 @@ Cost-aware: each case spawns 1–2 agents + a judge — iterate on one case id w
 - **Spec persistence:** the refined spec is posted as a marked Linear ticket **comment** (latest wins); the description holds a short Why/What/Success-criteria brief (no `.planning/` files anywhere).
 - **PR descriptions:** concise, high-fidelity (What / Why / Changes / Verification + Linear ref). No filler.
 - **Sandboxed execution:** all project code runs via `wf-exec` (no external egress, no credential reads); the `PreToolUse` guard enforces it.
+- **Headless never prompts:** `--headless` and `/wf-tick` never call `AskUserQuestion`; every prompt point becomes a Linear comment + park or a `wf:*` label. Unattended mode is opt-in per repo.
 - **Commit attribution:** executor commits carry `Co-Authored-By: Claude <noreply@anthropic.com>`.
 - Every agent embeds the same engineering discipline: surgical changes, simplicity, goal-driven verification.
 
