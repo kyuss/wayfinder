@@ -1,6 +1,6 @@
 ---
 description: Run the ticket-workflow eval harness — stage evals (spec-builder, planner, executor) over seed cases, judged by wf-judge, with regression comparison against the saved baseline. Run after changing any agent prompt, model, or the flow.
-argument-hint: [case-id ...] [--stage spec|decision|plan|execute|review]
+argument-hint: [case-id ...] [--stage spec|decision|plan|execute|review|route]
 allowed-tools: Task, Bash, Read, Write
 ---
 
@@ -12,15 +12,15 @@ It is fully offline: it touches only the local fixtures in `~/.claude/ticket-wor
 
 ## Scope
 - `EVAL = ~/.claude/ticket-workflow-evals`. Cases in `EVAL/cases/*.md`; fixtures in `EVAL/fixtures/`.
-- `$ARGUMENTS` may name specific case ids and/or `--stage spec|decision|plan|execute|review`. Default: all cases, all stages (run a stage only for cases whose `stages:` lists it).
+- `$ARGUMENTS` may name specific case ids and/or `--stage spec|decision|plan|execute|review|route`. Default: all cases, all stages (run a stage only for cases whose `stages:` lists it).
 
 ## Preconditions
 - `EVAL/cases` and `EVAL/fixtures` exist; `~/.claude/bin/wf-exec` is executable. If missing, tell the user to set up the harness.
 
 ## Per case
-Parse the case file: `id`, `fixture` (relative to `EVAL`), `stages`, the `## TICKET` block, the `## RUBRIC:spec` / `## RUBRIC:decision` / `## RUBRIC:plan` / `## RUBRIC:execute` / `## RUBRIC:review` blocks, and (review cases only) the `## MUTATION` block.
+Parse the case file: `id`, `fixture` (relative to `EVAL`), `stages`, the `## TICKET` block, the `## RUBRIC:spec` / `## RUBRIC:decision` / `## RUBRIC:plan` / `## RUBRIC:execute` / `## RUBRIC:review` blocks, and (review cases only) the `## MUTATION` block; (route cases only) the `## RUBRIC:route` and `## SCENARIO` blocks (`COMMAND`, `ARGS`, `MANUAL`, `MOCKS`).
 
-**Reset the fixture to a clean baseline first** (and again after each stage that mutates it):
+**Reset the fixture to a clean baseline first** (and again after each stage that mutates it) — skipped entirely when the case has `fixture: none`:
 `git -C "<fixture>" checkout -- . ; git -C "<fixture>" clean -fd ; git -C "<fixture>" checkout main 2>/dev/null` (delete any throwaway eval branch).
 
 ### Stage: spec (read-only — does not mutate the fixture)
@@ -51,10 +51,15 @@ Exercises `wf-reviewer` against a planted-flaw diff — the case ships a `## MUT
 4. Spawn `wf-judge` with `STAGE=review`, the case (TICKET + `## MUTATION` + `RUBRIC:review`), and `ARTIFACT`.
 5. Reset: `git -C "<fixture>" checkout main && git -C "<fixture>" branch -D eval/<id> && git -C "<fixture>" clean -fd`.
 
+### Stage: route (offline — no fixture, no Linear/GitHub)
+Exercises an orchestrator command's routing (e.g. `/wf-run --headless`, `/wf-tick`) against canned agent responses. Cases use `fixture: none`; skip every fixture reset/checkout for them.
+1. Spawn `wf-route-sim` with: `COMMAND_FILE` = the absolute path `~/.claude/commands/<SCENARIO COMMAND>`, and the scenario's `ARGS`, `MANUAL_TEXT` (the case's `MANUAL` block), and `MOCKS`. Capture its full output as `ARTIFACT`.
+2. Spawn `wf-judge` with `STAGE=route`, the case (TICKET + `## SCENARIO` + `RUBRIC:route`), and `ARTIFACT`. Record its verdict.
+
 ## Report + regression gate
 - Print a table: `case | stage | PASS/FAIL | score | biggest weakness`.
 - Compute the mean score and pass-rate.
-- **Compare to baseline:** if `EVAL/baselines/baseline.md` exists, diff each case/stage verdict against it and flag any **regression** (was PASS now FAIL, or score dropped > 0.15). If there are regressions, say so loudly — that's the signal a recent agent/model/flow change degraded the pipeline.
+- **Compare to baseline:** if `EVAL/baselines/baseline.md` exists, diff each case/stage verdict against it and flag any **regression** (was PASS now FAIL, or score dropped > 0.15). A case/stage absent from `baseline.md` (e.g. the `route` cases before they are promoted) is reported as `new`, never as a regression. If there are regressions, say so loudly — that's the signal a recent agent/model/flow change degraded the pipeline.
 - Save this run to `EVAL/baselines/run-<today>.md` — but **never overwrite an existing run record**: if that file already exists (a same-day rerun), save to `run-<today>-<HHMMSS>.md` instead (e.g. `date +%Y-%m-%d-%H%M%S`) so each run is preserved as immutable history. Then offer to promote it to `baseline.md` (only do so on explicit user confirmation — never overwrite the baseline silently). `baseline.md` is the moving gold pointer the gate diffs against; the dated `run-*.md` files are the permanent per-run archive and are never pruned.
 
 ## Notes
