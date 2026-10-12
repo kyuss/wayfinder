@@ -1,0 +1,55 @@
+#!/bin/bash
+# wf-tick — run one unattended /wf-tick sweep for a repo, safely, from launchd or by hand.
+#
+# Usage: wf-tick <repo-path> [--dry-run]
+#
+# Why a wrapper: launchd fires every few minutes and a sweep (spec + build) can outlast the
+# interval, so ticks must never overlap for the same repo. A per-repo lock + a per-repo log
+# also let several repos be ticked side by side without stepping on each other.
+set -euo pipefail
+
+[ $# -ge 1 ] || { echo "usage: wf-tick <repo-path> [--dry-run]" >&2; exit 2; }
+
+REPO="$(git -C "$1" rev-parse --show-toplevel)" || { echo "wf-tick: not a git repo: $1" >&2; exit 1; }
+CLAUDE="${CLAUDE_HOME:-$HOME/.claude}"
+
+# Per-repo key: readable basename + path hash (two repos can share a basename).
+# KEEP IN SYNC with tick_key in install.sh — the launchd label and log names derive from it.
+KEY="$(printf '%s' "${REPO##*/}" | tr -c 'A-Za-z0-9._-' '_')-$(printf '%s' "$REPO" | shasum | cut -c1-8)"
+
+STATE="$CLAUDE/wf-tick"
+LOG="$STATE/logs/$KEY.log"
+LOCK="$STATE/locks/$KEY.lock"
+mkdir -p "$STATE/logs" "$STATE/locks"
+
+log() { printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*" >>"$LOG"; }
+
+# macOS has no flock(1); mkdir is atomic, so it doubles as the lock.
+if ! mkdir "$LOCK" 2>/dev/null; then
+  # A crashed tick (kill -9, power loss) never runs its EXIT trap; break locks older than 2h.
+  if [ -n "$(find "$LOCK" -maxdepth 0 -mmin +120 2>/dev/null)" ]; then
+    log "breaking stale lock"
+    rm -rf "$LOCK"
+    mkdir "$LOCK" 2>/dev/null || { log "tick already running — skipped"; exit 0; }
+  else
+    log "tick already running — skipped"
+    exit 0
+  fi
+fi
+echo $$ >"$LOCK/pid"
+# Only the owner removes the lock (guards against removing a lock another tick re-took).
+trap '[ "$(cat "$LOCK/pid" 2>/dev/null)" = "$$" ] && rm -rf "$LOCK"' EXIT
+
+CLAUDE_BIN="$(command -v claude)" || { log "claude not found on PATH — aborting"; exit 1; }
+
+PROMPT="/wf-tick"
+[ "${2:-}" = "--dry-run" ] && PROMPT="/wf-tick --dry-run"
+
+printf '=== tick %s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$REPO" >>"$LOG"
+# Deliberately NO --dangerously-skip-permissions / --permission-mode / --allowedTools: a headless
+# tick runs under the permissions the user already granted and must never need a prompt
+# (`claude -p` cannot answer one). Widening permissions here would let ticket text escalate.
+rc=0
+(cd "$REPO" && "$CLAUDE_BIN" -p "$PROMPT" --model sonnet) >>"$LOG" 2>&1 || rc=$?
+printf '=== exit %s\n' "$rc" >>"$LOG"
+exit "$rc"

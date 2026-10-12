@@ -20,7 +20,7 @@
 - test-the-tester: `/wf-calibrate` — validates `wf-judge` against `ticket-workflow-evals/calibration/gold.md`; rerun after changing the judge's model/prompt
 
 ## Architecture
-`agents/wf-*.md` (10 files, Source of truth for behavior):
+`agents/wf-*.md` (11 files, Source of truth for behavior):
 - `wf-spec-builder` (opus) — interactive: ticket + codebase → sharp clarifying questions or a written-back spec.
 - `wf-planner` (opus) — spec + codebase/PR history → concrete execution plan + forward `CONTEXT_PACK`; may raise a blocking question.
 - `wf-executor` (sonnet) — implements the plan in-worktree with surgical, atomic commits; writes code.
@@ -31,13 +31,16 @@
 - `wf-linear` (haiku) — owns ALL Linear I/O (fetch, transition states, comments, spec round-trip); structured data only, never writes code.
 - `wf-github` (haiku) — owns ALL `gh` CLI I/O (PR history, push, open PR, check/merge status); structured data only, never writes code.
 - `wf-judge` (sonnet) — LLM-as-judge for the eval harness only; scores an artifact against a case rubric, never runs in `/wf-run`.
+- `wf-route-sim` (sonnet) — eval-only: dry-runs an orchestrator command against canned responses and emits an action trace for `wf-judge` (route stage); never runs in `/wf-run` or `/wf-tick`.
 
-`commands/wf-*.md` (6 files, orchestrators): `wf-prime`, `wf-spec`, `wf-run`, `wf-quick`, `wf-eval`, `wf-calibrate`.
+`commands/wf-*.md` (7 files, orchestrators): `wf-prime`, `wf-spec`, `wf-run`, `wf-quick`, `wf-eval`, `wf-calibrate`, `wf-tick`.
 - Note: `wf-quick` isn't mentioned in the top-level `CLAUDE.md` prose but is a real, shipped command (small follow-up tweaks to an existing worktree/PR, no new plan/PR) — the files win over the prose.
+- `wf-tick` — opt-in unattended sweep (resume answers -> spec -> build), limited to the manual's `## Automation` `linear-projects`; relies on the never-prompting `--headless` modes of `wf-spec`/`wf-run`.
 
 Other load-bearing paths:
 - `bin/wf-exec` — sandbox wrapper, the entry point for **all** project-code execution: strips secret-shaped env vars, runs the command under `sandbox-exec` with a watchdog timeout (`WF_EXEC_TIMEOUT`, default 540s).
 - `bin/wf-fetch-handoff` — allowlisted (Linear hosts only)/https-only/size-capped/zip-slip-guarded downloader for Linear design-handoff embeds; runs orchestrator-side, outside any ticket worktree.
+- `bin/wf-tick` — per-repo lock (atomic `mkdir`, stale >2h) + log wrapper that runs `claude -p "/wf-tick"` for one repo. `install.sh --enable-tick <repo>` writes its launchd plist to `~/Library/LaunchAgents/com.wayfinder.wf-tick.<key>.plist`; state lives in `$CLAUDE/wf-tick/{logs,locks}`.
 - `hooks/wf-sandbox-guard.sh` — `PreToolUse` hook forcing unwrapped Bash (project runners + raw network binaries) through `wf-exec` inside worktrees.
 - `hooks/wf-boundary-toolcall-guard.sh` — `SubagentStop` hook blocking `wf-linear`/`wf-github` from finishing with zero tool calls (anti-fabrication guard).
 - `ticket-workflow-sandbox.sb.template` — macOS seatbelt profile; `install.sh` fills in `__HOME__`/`__CLAUDE__` placeholders to produce the live `.sb`.
@@ -77,6 +80,7 @@ Other load-bearing paths:
 - Sandbox (`sandbox-exec`) is macOS-only; on other platforms `/wf-run` runs project code unsandboxed — a documented, not silently swallowed, risk.
 - The workflow this repo defines never merges, waits on checks, or sets Linear "Done" autonomously — a human always closes the loop; don't add a code path that does.
 - Editing an agent/command file here has **zero effect on a running session** until `./install.sh` is re-run.
+- `install.sh --enable-tick` registers a real launchd job on this machine — verify manually only; never run it from automation or tests.
 
 ## Linear workflow
 - Ready for Development → (auto) <!-- no LINEAR_STATES provided — set manually -->
@@ -88,3 +92,12 @@ Other load-bearing paths:
 - spec-questions: inline   <!-- inline = /wf-spec asks clarifying questions in the terminal (solo dev);
                                  linear = post them as a Linear comment and park the ticket in Needs Answers
                                  for a teammate to answer async. Default: inline. Override per-run with --inline/--linear. -->
+
+## Automation
+<!-- Opt-in unattended /wf-tick (enable the schedule with `./install.sh --enable-tick <repo>`).
+     Keys inside this comment are ignored — uncomment them to enable.
+- enabled: true
+- linear-projects: <Project name or slug>, <another>   (required; each Linear project is listed by exactly one repo)
+- trigger-state: Todo
+- max-runs-per-tick: 3
+-->

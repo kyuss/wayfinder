@@ -79,6 +79,15 @@ Use exactly this skeleton. Keep the whole file roughly **100–180 lines**. Ever
                                  for a teammate to answer async. Default: inline. Override per-run with --inline/--linear. -->
 - integration: auto        <!-- auto = after the PRs open, /wf-run runs the Verification policy's sandbox-runnable
                                  integration suites (combined tree for a batch); off = skip the stage. Default: auto. -->
+
+## Automation
+<!-- Opt-in unattended /wf-tick (enable the schedule with `./install.sh --enable-tick <repo>`).
+     Keys inside this comment are ignored — uncomment them to enable.
+- enabled: true
+- linear-projects: <Project name or slug>, <another>   (required; each Linear project is listed by exactly one repo)
+- trigger-state: Todo
+- max-runs-per-tick: 3
+-->
 ```
 
 **Linear workflow section:** if you were given a `LINEAR_STATES` block (the team's live states + types), map each canonical stage to the best-matching state **by name, then type** and fill the right-hand side in; if a stage has no reasonable match, write `(auto)` with a `<!-- no match — set manually -->` note, and set `On merge, set →` to the first `started`-type state named like QA/Test/Verify, else `In Review`. If you were **not** given `LINEAR_STATES`, write `(auto)` for the three stages and default `On merge, set →` to `QA` (leave the comment telling the user to adjust). Never put a `completed`-type state on the `On merge` line.
@@ -86,5 +95,7 @@ Use exactly this skeleton. Keep the whole file roughly **100–180 lines**. Ever
 **Verification policy section:** fill `always:` from the Commands section. Add an `integration:` line only for a suite you actually found evidence of (a CI job, a script, a test dir) — never invent one; if there are none, emit `- integration: none` so the knob stays discoverable. Judge `sandbox:` honestly: `yes` only when the suite needs no external network and no device.
 
 **Workflow preferences section:** emit it verbatim as shown (a static stub defaulting `spec-questions: inline` and `integration: auto`). Don't infer or change the values — they're knobs the user edits by hand; you're just scaffolding them so they're discoverable.
+
+**Automation section:** emit it verbatim, commented-out as shown; never enable it or fill in project names — the user opts in by hand.
 
 Return a one-line confirmation (`CONTEXT.md written: <path>, <N> lines`) — not the file body.

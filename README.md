@@ -26,10 +26,11 @@ an overview; when they disagree, the files win.
 
 | Path | What |
 |---|---|
-| `agents/wf-*.md` | 10 subagents — spec-builder, planner, executor, reviewer, verifier, cartographer, runner, the Linear/GitHub boundary agents, and an eval judge |
-| `commands/wf-*.md` | 6 slash commands — `/wf-prime`, `/wf-spec`, `/wf-run`, `/wf-quick`, `/wf-eval`, `/wf-calibrate` |
+| `agents/wf-*.md` | 11 subagents — spec-builder, planner, executor, reviewer, verifier, cartographer, runner, the Linear/GitHub boundary agents, an eval judge, and an eval-only route simulator |
+| `commands/wf-*.md` | 7 slash commands — `/wf-prime`, `/wf-spec`, `/wf-run`, `/wf-quick`, `/wf-eval`, `/wf-calibrate`, `/wf-tick` |
 | `bin/wf-exec` | Runs a repo's tests/build/lint inside a no-network, no-secrets sandbox |
 | `bin/wf-fetch-handoff` | Safely downloads a Linear design-handoff embed (allowlisted, size-capped, zip-slip-guarded) |
+| `bin/wf-tick` | Lock-guarded wrapper that runs one unattended `/wf-tick` sweep for a repo (used by the optional launchd schedule) |
 | `hooks/` | Two guard hooks: sandbox enforcement + boundary-agent tool-call enforcement |
 | `ticket-workflow-sandbox.sb.template` | macOS seatbelt profile (installer fills in your `$HOME`) |
 | `ticket-workflow-evals/` | The regression gate — fixtures, cases, rubrics, baselines, judge calibration |
@@ -82,6 +83,23 @@ depends on them.
 
 Then, in Claude Code: connect Linear (`/mcp`), run `/wf-prime` in a repo, and try
 `/wf-spec <TICKET-ID>` → `/wf-run <TICKET-ID>`.
+
+### Optional: unattended ticks
+
+`/wf-tick` can run on a schedule (macOS launchd) and advance tickets for you —
+resume answered tickets, spec tickets in your trigger state, build the spec'd ones.
+It is **opt-in per repo** and nothing is scheduled by default:
+
+```bash
+./install.sh --enable-tick /path/to/repo     # one launchd agent per repo, every 300 s
+./install.sh --disable-tick /path/to/repo    # remove it
+```
+
+The repo's `CONTEXT.md` needs an uncommented `## Automation` section (`enabled: true`,
+`linear-projects: …`; `/wf-prime` scaffolds it commented-out). Ticks run through
+`claude -p`, which cannot answer permission prompts, so they use your **existing**
+permission settings — pre-approve what `/wf-spec` and `/wf-run` need (the wrapper never
+adds `--dangerously-skip-permissions`). Logs: `~/.claude/wf-tick/logs/`.
 
 ## Configuring your Linear workflow states
 

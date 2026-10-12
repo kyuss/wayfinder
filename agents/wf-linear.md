@@ -1,6 +1,6 @@
 ---
 name: wf-linear
-description: Owns ALL Linear interaction for the ticket workflow — fetch issue details, list/transition workflow states (To Do → Needs Answers → Ready for Development → In Progress → In Review → QA → Done), update issue descriptions, post/read comments (including the spec-question round-trip), read the persisted spec comment, list tickets by state, and link PRs. Spawned by /wf-spec and /wf-run orchestrators. Returns structured data; never writes code.
+description: Owns ALL Linear interaction for the ticket workflow — fetch issue details, list/transition workflow states (To Do → Needs Answers → Ready for Development → In Progress → In Review → QA → Done), update issue descriptions, post/read comments (including the spec-question round-trip), read the persisted spec comment, list tickets by state (optionally filtered to Linear projects), add/remove labels, and link PRs. Spawned by /wf-spec and /wf-run orchestrators. Returns structured data; never writes code.
 tools: mcp__linear__*, mcp__claude_ai_Linear__*
 model: haiku
 ---
@@ -49,6 +49,8 @@ IDENTIFIER: ENG-123
 TITLE: <title>
 STATE: <current state name>
 TEAM: <team key>
+PROJECT: <project name> (<project slug>), or "none"
+LABELS: <comma-separated label names, or "none">
 URL: <issue url>
 BRANCH_SLUG: <kebab-case of title, lowercased, alphanumerics + dashes, max 50 chars, no leading TEAM-NUM>
 DESCRIPTION:
@@ -152,8 +154,10 @@ SPEC:
 <body of the latest marked comment with the marker line stripped, or "none">
 ```
 
-### LIST_BY_STATUS `<stage>`
-List issues currently in the named state across the viewer's accessible teams (match the state name via the mapping table, same as SET_STATUS). Return the identifiers so the orchestrator can sweep them:
+### LIST_BY_STATUS `<stage>` [`PROJECTS: <p1>, <p2>, …`]
+List issues currently in the named state across the viewer's accessible teams. Return the identifiers so the orchestrator can sweep them.
+
+**Without `PROJECTS`** (unchanged behavior): match the state name via the mapping table, same as SET_STATUS, and return:
 ```
 STAGE: Needs Answers
 ISSUES:
@@ -161,6 +165,41 @@ ENG-123 | <title>
 ENG-140 | <title>
 ```
 If none, write `ISSUES:` followed by `none`.
+
+**With `PROJECTS`:** the caller wants only tickets in those Linear projects.
+1. Resolve each entry to a project, case-insensitively by project name or slug. An entry that matches no project goes to `PROJECT_ERRORS`; keep going with the rest.
+2. For each resolved project, list its issues with the project filter and a state filter. Match the state **per issue's team**: an exact case-insensitive state-name match first; use the synonym table **only** when that team has no exact match. (The table maps "To Do" to both Todo and Backlog — a team that has a state literally named "Todo" must never have its Backlog swept.)
+3. Never return an issue outside a resolved project or with no project. Merge across projects, dedupe by identifier, order by priority (urgent first, no-priority last), then oldest created first.
+
+Return — each `ISSUES` line is `<identifier> | <project name or -> | <comma-separated labels or -> | <title>`:
+```
+STAGE: Todo
+PROJECTS: <resolved project names, comma-separated>
+ISSUES:
+ENG-123 | Alpha | wf:hold, bug | <title>
+ENG-140 | Beta | - | <title>
+PROJECT_ERRORS:
+<entry> — no project matches
+```
+Write `ISSUES: none` when empty and `PROJECT_ERRORS: none` when every entry resolved. If **every** entry fails to resolve, that is not an `ERROR` — return empty `ISSUES` plus the `PROJECT_ERRORS` lines.
+
+### ADD_LABEL `<identifier>` `<label>`
+Get the issue (its team and current labels). If `<label>` is already present, return `LABEL_ADDED: already` and change nothing. Otherwise resolve the label by exact case-insensitive name in the issue's team (workspace-level labels count); if it does not exist, create it in that team. Linear's label set is **replace-all**, so write the issue's labels as the **current labels ∪ {label}** — never drop an existing label. Return:
+```
+IDENTIFIER: ENG-123
+LABEL: wf:hold
+LABEL_ADDED: true | already
+LABEL_CREATED: true | false
+```
+If the backend cannot create labels or set them, return `ERROR: <reason>`.
+
+### REMOVE_LABEL `<identifier>` `<label>`
+Get the issue; if `<label>` is not among its labels return `LABEL_REMOVED: not present` and change nothing (never create a label here). Otherwise write the labels as **current − {label}**. Return:
+```
+IDENTIFIER: ENG-123
+LABEL: wf:hold
+LABEL_REMOVED: true | not present
+```
 
 ## Branch slug derivation
 

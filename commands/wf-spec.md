@@ -1,6 +1,6 @@
 ---
 description: Interactively refine one or more Linear tickets into implementation-ready specs — posted as a marked comment on each ticket, with a short Why/What/Success-criteria brief written to its description — or, for research/spike tickets, record a decision written back to the description. Run this BEFORE /wf-run.
-argument-hint: "[--inline|--linear] [ticket-id...]  (linear mode runs tickets in parallel; no ids + linear = resume everything awaiting answers)"
+argument-hint: "[--inline|--linear] [--headless] [ticket-id...]  (linear mode runs tickets in parallel; no ids + linear = resume everything awaiting answers)"
 allowed-tools: Task, Bash, Read, Edit, AskUserQuestion
 ---
 
@@ -23,6 +23,8 @@ Resolve two things before processing tickets: the **question mode** and the **ti
 2. **Repo preference:** else, if `MANUAL` has a `## Workflow preferences` section with a `spec-questions:` key, use its value (`inline` or `linear`).
 3. **Built-in default:** else `MODE=inline`.
 
+**`--headless`** (unattended; used by `/wf-tick`) sets `HEADLESS` and forces `MODE=linear`, overriding `--inline` and the repo preference. Strip it from the id list. See *Headless mode* below.
+
 - `MODE=inline` — put clarifying questions to **you** in the terminal via AskUserQuestion (the solo-dev path; needs no special Linear state).
 - `MODE=linear` — post the questions as a Linear **comment** and park the ticket in *Needs Answers* for a teammate to answer asynchronously in the Linear UI (no terminal).
 
@@ -37,6 +39,16 @@ Resolve two things before processing tickets: the **question mode** and the **ti
 - **`MODE=inline` — strictly sequential.** Finish one ticket (steps 1–6) before starting the next. Its clarifying questions are a live terminal conversation; interleaving them would be confusing. (Unchanged behavior.)
 - **`MODE=linear` — parallel by default.** Linear mode never blocks on you at all, so fan the whole batch out end-to-end: run steps **1–5** for **up to 3 tickets concurrently** (same cap as `/wf-run --parallel`). A ticket whose builder returns `NEEDS_INPUT` posts its questions and parks itself (step 4's linear branch) with no interaction; a ticket that returns `SPEC`/`DECISION` **persists directly with no confirmation** (step 5 — linear mode never prompts you in the terminal). There is no serial touchpoint. This is read-only work (no worktrees), so concurrent `wf-spec-builder`/`wf-linear`/`wf-github` spawns don't contend.
   - **Order by intra-batch dependencies.** If one batch ticket `blocks` / is `blocked-by` another *in the same batch* (e.g. a spike and the ticket it unblocks), run the dependency in an **earlier wave** so its decision/spec is persisted before the dependent's step-3 `RELATED_DECISIONS` pull runs. Independent tickets share the first wave; when the batch has no internal links — the common case — it's a single wave.
+
+## Headless mode (`--headless`)
+
+Unattended run (driven by `/wf-tick`, no human at the terminal). Everything below is additive; without `--headless` none of it applies.
+
+- **Never call AskUserQuestion.** `MODE` is forced to `linear`: the inline branches of steps 4 and 5 are never taken, and results persist directly with no confirmation.
+- **Scope re-check after step 1's FETCH.** If `PROJECTS` is in effect (set by `/wf-tick`) and the fetched `PROJECT` name/slug is not in it → skip the ticket with **no writes**, outcome `skipped — not in a listed project`. If the fetched `LABELS` contain `wf:hold`, `wf:failed` or `wf:needs-human` → skip with no writes, outcome `skipped — <label>`.
+- **Defaulted answers.** On a resume, if any question was left unanswered/ambiguous and fell back to its recommended option, still write the spec as usual. Then, after persist calls (1)–(3) all succeed: spawn `wf-linear` `ADD_LABEL <identifier> wf:hold`, then `POST_COMMENT <identifier>` whose first line is `🤖 Spec defaults applied — review before build` (this marker must never start with `🤖 Spec questions` or `🤖 Implementation spec`), followed by one line per defaulted answer, `Qn: <question> -> <defaulted option>`, and the sentence "Remove the wf:hold label to let the build start." The ticket still moves to Ready for Development; the label is what holds the build.
+- **`STATUS: DECISION`.** Persist as usual (step 5 decision flavor), then `ADD_LABEL <identifier> wf:hold` and post a comment saying the decision is recorded and a human closes the spike.
+- **`wf-linear` `ERROR`.** Report it in the summary, skip that ticket, keep any writes already completed. Never ask how to proceed.
 
 ## Per ticket
 
@@ -54,13 +66,14 @@ Resolve two things before processing tickets: the **question mode** and the **ti
    **Resume entry — if step 1 flagged this ticket as *Needs Answers*:** before spawning the builder, spawn `wf-linear` with intent `READ_ANSWERS <identifier>`.
    - `QUESTIONS_STATUS: AWAITING` → the teammate hasn't replied yet. Report "still awaiting answers" and leave it parked — don't spawn the builder. (In linear-parallel mode this ticket's task is simply done.)
    - `QUESTIONS_STATUS: NO_PENDING` → no question comment found; treat as a fresh spawn (no `ANSWERS`).
+   - The pending `🤖 Spec questions` comment may have been posted by `/wf-run`'s planner (headless build parked the ticket) rather than by `/wf-spec` — handle it identically; the builder folds those answers into a new spec.
    - `QUESTIONS_STATUS: ANSWERED` → build the `ANSWERS:` section from the reply. The `QUESTIONS` body it returns is the exact comment you posted (numbered questions, lettered options, ✅ on the recommended). Map the teammate's free-text reply onto it: `all recommended` → every ✅ option; `1: B` → question 1's option B label; option text or clear paraphrase → that option; genuine free-text that matches no option → pass it verbatim (an "Other" answer). If a question is left unanswered or is truly ambiguous, fall back to its recommended option **and note it in the run summary** so you can flag it to the user. Emit `ANSWERS:` as one line per question: `Qn (<question text>): <chosen option label(s) verbatim>[ — <free-text>]`. Then spawn the builder with the base inputs **plus** this `ANSWERS:` section.
 
    **Handling the builder's return (both fresh and resume):**
    - **`STATUS: SPEC`** — strip the status line and split the body on the two sentinel lines into `TICKET_DESCRIPTION` (before `--- SPEC ---`) and `SPEC` (after it); go to step 5 (persist as a spec). (A clear-enough ticket returns this on the first fresh spawn with no questions — fine, not an error. No questions comment is posted and the ticket is never parked.)
    - **`STATUS: DECISION`** — a research/spike ticket, resolved. The body is the full new description (original preserved + an appended `## Decision` section). Strip the status line; go to step 5 (persist in **decision mode**).
    - **`STATUS: NEEDS_INPUT`** — a genuine decision is open:
-     - **`MODE=inline`** → put the blocks to the user yourself via AskUserQuestion (you're the orchestrator — it works here): map each block to a question, options in the given order with the `(recommended)` one first and labeled "(Recommended)". Re-spawn the builder with the same inputs plus the `ANSWERS:` section. Repeat until it returns a spec (1–2 rounds is normal; after ~3, ask the user whether to push through with defaults).
+     - **`MODE=inline`** (never under `--headless` — see Headless mode) → put the blocks to the user yourself via AskUserQuestion (you're the orchestrator — it works here): map each block to a question, options in the given order with the `(recommended)` one first and labeled "(Recommended)". Re-spawn the builder with the same inputs plus the `ANSWERS:` section. Repeat until it returns a spec (1–2 rounds is normal; after ~3, ask the user whether to push through with defaults).
      - **`MODE=linear`** → **post the questions to Linear and park** — do NOT block or ask in the terminal:
        1. Render **all** the builder's question blocks into ONE consolidated markdown comment, in exactly this shape (the first line is the marker `READ_ANSWERS` keys on — keep it verbatim):
           ```
@@ -92,11 +105,11 @@ Resolve two things before processing tickets: the **question mode** and the **ti
    - **(2)** Spawn `wf-linear` `UPDATE_DESCRIPTION <identifier>` with `NEW_DESCRIPTION`.
    - **(3)** Spawn `wf-linear` `SET_STATUS <identifier> "<READY_STATE>"` to mark the ticket spec-ready for `/wf-run`.
    - **Failure semantics:** if (1) returns `ERROR`, do **not** run (2) or (3) — surface the error and leave the ticket unchanged (nothing to fall back to yet). If (2) returns `ERROR`, the spec comment from (1) is already the source of truth — surface the error and still run (3). If (3) returns `ERROR` (e.g. the team has no such state), surface it but treat (1)+(2) as the success — don't undo them.
-   - **`MODE=inline`** → one confirmation gates all three calls: "Post the spec comment and refresh the description on <identifier>?" (Yes / Edit / Skip). **Yes** → run (1)–(3). **Edit** → relay the user's tweaks back to `wf-spec-builder` (re-spawn with the prior spec + requested changes; it returns both sections again), then re-confirm. **Skip** → leave the ticket unchanged — neither write happens.
+   - **`MODE=inline`** (never under `--headless` — see Headless mode) → one confirmation gates all three calls: "Post the spec comment and refresh the description on <identifier>?" (Yes / Edit / Skip). **Yes** → run (1)–(3). **Edit** → relay the user's tweaks back to `wf-spec-builder` (re-spawn with the prior spec + requested changes; it returns both sections again), then re-confirm. **Skip** → leave the ticket unchanged — neither write happens.
    - **`MODE=linear`** → run (1)–(3) directly, no confirmation.
 
    **Decision (`STATUS: DECISION`)** — the persist action: spawn `wf-linear` with intent `UPDATE_DESCRIPTION <identifier>` and the returned description (original + `## Decision` section) as the new description. **Do NOT set Ready-for-Development** — a resolved spike has nothing to build; leave its status unchanged. The recorded decision now reaches any dependent ticket via the `RELATED_DECISIONS` pull (step 3) and folds into that ticket's own spec when it's refined.
-   - **`MODE=inline`** → confirm "Record this decision on <identifier>?" (Yes / Edit / Skip) first. **Yes** → run the persist action, then tell the user the spike is decided and that they close it (Done) in Linear when satisfied. **Edit** → relay the user's tweaks back to `wf-spec-builder` and re-confirm. **Skip** → leave the ticket unchanged; note it.
+   - **`MODE=inline`** (never under `--headless` — see Headless mode) → confirm "Record this decision on <identifier>?" (Yes / Edit / Skip) first. **Yes** → run the persist action, then tell the user the spike is decided and that they close it (Done) in Linear when satisfied. **Edit** → relay the user's tweaks back to `wf-spec-builder` and re-confirm. **Skip** → leave the ticket unchanged; note it.
    - **`MODE=linear`** → run the persist action directly.
 
 6. Status moves to **Ready for Development** only when the **spec comment** was posted (step 5 spec → Yes, call (1) succeeded) — this also lifts a resumed ticket out of *Needs Answers*. A **decision** written for a research/spike ticket does **not** transition status (the workflow never auto-completes; the human closes the spike). Tickets **parked** for answers sit in *Needs Answers*; tickets that were skipped — or edited but not yet written — keep their current status; don't transition them.
@@ -106,5 +119,5 @@ Resolve two things before processing tickets: the **question mode** and the **ti
 Print a compact summary: each identifier → `spec written` / `decision recorded` / `awaiting answers` / `still awaiting` / `skipped`. For any `decision recorded`, note the spike is resolved and the user closes it in Linear when satisfied. If any ticket is `awaiting answers`, remind the user that their teammate answers the question comment in Linear, and that re-running `/wf-spec <id>` — or `/wf-spec` with no ids to sweep every parked ticket — resumes it. For tickets with a spec written, remind them they can now run `/wf-run <ids>`. Also surface any answers you had to default (from an ambiguous/blank reply) so the user can correct them.
 
 ## Notes
-- If `wf-linear` returns `ERROR`, surface it plainly and ask the user how to proceed — don't guess ticket data.
+- If `wf-linear` returns `ERROR`, surface it plainly and ask the user how to proceed (never under `--headless` — see Headless mode) — don't guess ticket data.
 - Keep your own prose terse — your job in the loop is to relay the builder's questions to the user and its spec back. Relay the questions directly, without explaining why they're coming from you.
